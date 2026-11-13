@@ -39,3 +39,45 @@
 .midi-device-list,.midi-unsupported{grid-column:1/-1;overflow-wrap:anywhere}
 .midi-unsupported{color:#c49a65}
 @media(max-width:650px){.midi-panel{grid-template-columns:1fr;gap:12px}.midi-button{justify-self:start}.midi-device-list,.midi-unsupported{grid-column:auto}}
+
+
+/* Clear, readable signal routing */
+.signal-flow{display:flex;align-items:center;gap:10px;padding:18px 16px;margin-bottom:20px;border:1px solid #343d3f;border-radius:6px;background:linear-gradient(90deg,#151a1c,#1b2022);overflow-x:auto}
+.signal-stage{display:flex;flex:1;min-width:92px;flex-direction:column;gap:5px;padding:10px 12px;border:1px solid #3a4446;border-radius:5px;background:#202629}
+.signal-stage>span{font:8px var(--mono);color:var(--cyan);letter-spacing:1px}
+.signal-stage strong{font:600 10px var(--display);letter-spacing:.7px;color:#e9eee9;white-space:nowrap}
+.signal-stage small{font:8px var(--mono);color:#849092;white-space:nowrap}
+.signal-arrow{color:#657174;font:18px var(--mono);flex:none}
+.signal-output{display:flex;align-items:center;gap:7px;padding:10px 0;font:9px var(--mono);letter-spacing:1px;color:var(--cyan);white-space:nowrap}
+.output-led{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 9px var(--cyan)}
+.route-groups{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.route-group{min-width:0;border:1px solid #30393c;border-radius:6px;background:#15191b;overflow:hidden}
+.route-group-heading{display:flex;align-items:center;gap:11px;padding:13px 14px;border-bottom:1px solid #30393c;background:#1c2224}
+.route-group-index{display:grid;place-items:center;width:25px;height:25px;border:1px solid #485456;border-radius:4px;color:var(--amber);font:10px var(--mono)}
+.route-group-heading div{display:flex;flex-direction:column;gap:4px}
+.route-group-heading strong{font:9px var(--mono);letter-spacing:1px;color:#e2e8e2}
+.route-group-heading small{font:8px var(--mono);color:#849092}
+.route-list{padding:5px 12px}
+.route-row{display:grid;grid-template-columns:minmax(90px,1fr) 35px minmax(95px,1fr) auto;align-items:center;gap:8px;min-height:54px;border-bottom:1px solid #2a3133;opacity:.62;transition:opacity .15s}
+.route-row:last-child{border-bottom:0}
+.route-row.is-connected{opacity:1}
+.route-source,.route-destination{display:flex;align-items:center;gap:8px;font:9px var(--mono);letter-spacing:.5px;color:#e2e8e2;white-space:nowrap}
+.route-destination{color:#b8c2bd}
+.route-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#778184}
+.route-dot.cyan{background:var(--cyan);box-shadow:0 0 7px #65d9d177}
+.route-dot.violet{background:var(--violet);box-shadow:0 0 7px #b59af477}
+.route-type{font:8px var(--mono);color:#758184;text-align:center}
+.route-switch{min-width:91px;padding:7px 8px;border:1px solid #485254;border-radius:4px;background:#202629;color:#9aa5a3;font:8px var(--mono);letter-spacing:.5px;transition:all .15s}
+.route-row.is-connected .route-switch{border-color:#4f8d83;background:#1b302c;color:var(--cyan)}
+.route-switch:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.routing-footnote{line-height:1.6}
+@media(max-width:900px){.route-groups{grid-template-columns:1fr}.signal-flow{gap:7px}.signal-stage{min-width:82px;padding:9px}.signal-stage strong{font-size:9px}}
+@media(max-width:650px){.signal-flow{justify-content:flex-start}.signal-stage{flex:0 0 100px}.route-row{grid-template-columns:minmax(85px,1fr) 28px minmax(90px,1fr) auto;gap:5px}.route-source,.route-destination{font-size:8px}.route-switch{min-width:78px;padding:7px 5px;font-size:7px}.route-list{padding:4px 7px}.route-group-heading{padding:11px}}
+
+
+/* Modulation status is read-only here; edit depth in its source module. */
+.route-group-modulation{grid-column:1/-1}
+.route-state{justify-self:end;min-width:112px;padding:7px 8px;border:1px solid #3b4447;border-radius:4px;background:#1a1f21;color:#879294;text-align:center;font:8px var(--mono);letter-spacing:.35px;white-space:nowrap}
+.route-state.is-active{border-color:#7866a7;background:#272238;color:#c5b4f5}
+@media(max-width:900px){.route-group-modulation{grid-column:auto}}
+@media(max-width:650px){.route-state{min-width:78px;padding:6px 4px;font-size:7px}.route-group-modulation{grid-column:auto}}
