@@ -103,8 +103,8 @@ export default function App() {
     sourceNotes.current.set(source, { note, displayNote });
     await engine.current.start();
     const pitchIsStillHeld = [...sourceNotes.current.values()].some((entry) => entry.note === note);
-    if (!pitchIsStillHeld) return;
-    engine.current.noteOn(note, velocity);
+    if (pitchIsStillHeld) engine.current.noteOn(note, velocity);
+    if (!sourceNotes.current.has(source)) return;
     setPowered(true);
     setHeld((current) => current.includes(displayNote) ? current : [...current, displayNote]);
   }, []);
