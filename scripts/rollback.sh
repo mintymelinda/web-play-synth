@@ -30,6 +30,9 @@ if [[ ! -L "$PREVIOUS_LINK" ]]; then
 fi
 
 previous_target="$(readlink "$PREVIOUS_LINK")"
+if [[ "$previous_target" != /* ]]; then
+    previous_target="$DATA_DIR/$previous_target"
+fi
 if [[ ! -d "$previous_target" || ! -s "$previous_target/index.html" ]]; then
     echo "Previous release is missing or incomplete: $previous_target" >&2
     exit 1
@@ -40,7 +43,7 @@ if [[ -L "$CURRENT_LINK" ]]; then
     mv -Tf "$TEMP_PREVIOUS" "$PREVIOUS_LINK"
 fi
 
-ln -s "$previous_target" "$TEMP_CURRENT"
+ln -s "releases/$(basename "$previous_target")" "$TEMP_CURRENT"
 mv -Tf "$TEMP_CURRENT" "$CURRENT_LINK"
 
 "${COMPOSE[@]}" up -d --no-deps web-play-synth
