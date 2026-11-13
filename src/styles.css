@@ -17,3 +17,14 @@
 .patch-status{margin:9px 0 13px;color:#9ca7a5;font:8px var(--mono);letter-spacing:.25px}
 .patch-status span{color:#657173;margin-left:8px}
 @media(max-width:650px){.patch-status span{display:block;margin:5px 0 0}}
+
+/* LFO and oscillator interaction controls */
+.modulation-module{margin-bottom:8px}
+.modulation-controls{display:grid;grid-template-columns:minmax(190px,.7fr) 2fr;gap:24px;align-items:center}
+.modulation-controls>.knob-row{padding:8px 0}
+.oscillator-modulation{display:flex;align-items:center;gap:24px;padding-top:15px;border-top:1px solid var(--line)}
+.sync-toggle{display:flex;align-items:center;gap:9px;color:#dce2dd;font:9px var(--mono);letter-spacing:1px;cursor:pointer}
+.sync-toggle input{position:absolute;opacity:0}
+.sync-toggle small{color:var(--muted);font-size:7px}
+.oscillator-modulation p{max-width:430px;margin:0 0 0 auto;color:#758082;font:9px/1.6 var(--mono)}
+@media(max-width:650px){.modulation-controls{grid-template-columns:1fr;gap:2px}.oscillator-modulation{align-items:flex-start;flex-wrap:wrap;gap:14px}.oscillator-modulation p{flex-basis:100%;margin:0}}
