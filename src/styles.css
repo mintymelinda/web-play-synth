@@ -103,3 +103,5 @@
 .route-group-modulation .route-group-heading small{line-height:1.5}
 .route-state{min-width:112px}
 @media(max-width:650px){.route-state{min-width:78px}}
+
+.select-control select:disabled{opacity:.45;cursor:not-allowed}
