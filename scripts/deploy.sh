@@ -95,7 +95,7 @@ if [[ -L "$CURRENT_LINK" ]]; then
     mv -Tf "$TEMP_PREVIOUS" "$PREVIOUS_LINK"
 fi
 
-ln -s "$RELEASE_DIR" "$TEMP_CURRENT"
+ln -s "releases/$RELEASE_ID" "$TEMP_CURRENT"
 mv -Tf "$TEMP_CURRENT" "$CURRENT_LINK"
 
 echo "Activating release $RELEASE_ID..."
