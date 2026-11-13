@@ -28,3 +28,14 @@
 .sync-toggle small{color:var(--muted);font-size:7px}
 .oscillator-modulation p{max-width:430px;margin:0 0 0 auto;color:#758082;font:9px/1.6 var(--mono)}
 @media(max-width:650px){.modulation-controls{grid-template-columns:1fr;gap:2px}.oscillator-modulation{align-items:flex-start;flex-wrap:wrap;gap:14px}.oscillator-modulation p{flex-basis:100%;margin:0}}
+
+/* Hardware MIDI input */
+.midi-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 18px;margin:0 0 18px;padding:14px 16px;border:1px solid var(--line);background:#111719}
+.midi-panel>div{display:grid;gap:5px}
+.midi-panel>div strong{font:11px var(--mono);letter-spacing:1px;color:#dce2dd}
+.midi-panel>div small,.midi-device-list,.midi-unsupported{font:8px var(--mono);letter-spacing:.45px;color:#748184}
+.midi-button{padding:10px 14px;border:1px solid #635b83;background:#211e2b;color:#c9b9f4;font:9px var(--mono);letter-spacing:1px;cursor:pointer;transition:background .15s,border-color .15s}
+.midi-button:hover{background:#302a40;border-color:#9a86d2}
+.midi-device-list,.midi-unsupported{grid-column:1/-1;overflow-wrap:anywhere}
+.midi-unsupported{color:#c49a65}
+@media(max-width:650px){.midi-panel{grid-template-columns:1fr;gap:12px}.midi-button{justify-self:start}.midi-device-list,.midi-unsupported{grid-column:auto}}

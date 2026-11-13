@@ -23,6 +23,20 @@ const notes = [
   { key: "K", note: 72, label: "C" },
 ];
 
+type MidiInputPort = {
+  id: string;
+  name?: string | null;
+  state?: string;
+  onmidimessage: ((event: { data: Uint8Array | null }) => void) | null;
+};
+type MidiAccessLike = {
+  inputs: { values(): IterableIterator<MidiInputPort> };
+  onstatechange: (() => void) | null;
+};
+type MidiNavigator = {
+  requestMIDIAccess?: () => Promise<unknown>;
+};
+
 type ParamProps = { label: string; value: number; min: number; max: number; step?: number; display?: (v: number) => string; onChange: (v: number) => void; logarithmic?: boolean };
 
 function Knob({ label, value, min, max, step = 0.01, display, onChange, logarithmic = false }: ParamProps) {
@@ -66,6 +80,10 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [patchMessage, setPatchMessage] = useState("Drag a source jack onto a destination to make a connection.");
+  const [midiDevices, setMidiDevices] = useState<string[]>([]);
+  const [midiConnected, setMidiConnected] = useState(false);
+  const sourceNotes = useRef(new Map<string, { note: number; displayNote: number }>());
+  const midiAccess = useRef<MidiAccessLike | null>(null);
 
   const connectPatch = (destination: string, source: string | null = dragSource) => {
     if (!source) return;
@@ -80,34 +98,157 @@ export default function App() {
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
   }, []);
-  const play = useCallback(async (note: number) => {
+  const playSource = useCallback(async (source: string, note: number, velocity = 0.82, displayNote = note) => {
+    if (sourceNotes.current.has(source)) return;
+    sourceNotes.current.set(source, { note, displayNote });
     await engine.current.start();
+    const pitchIsStillHeld = [...sourceNotes.current.values()].some((entry) => entry.note === note);
+    if (pitchIsStillHeld) engine.current.noteOn(note, velocity);
+    if (!sourceNotes.current.has(source)) return;
     setPowered(true);
-    engine.current.noteOn(note + octave * 12);
-    setHeld((current) => current.includes(note) ? current : [...current, note]);
-  }, [octave]);
-  const release = useCallback((note: number) => {
-    engine.current.noteOff(note + octave * 12);
-    setHeld((current) => current.filter((n) => n !== note));
-  }, [octave]);
+    setHeld((current) => current.includes(displayNote) ? current : [...current, displayNote]);
+  }, []);
+  const releaseSource = useCallback((source: string) => {
+    const entry = sourceNotes.current.get(source);
+    if (!entry) return;
+    sourceNotes.current.delete(source);
+    const pitchStillHeld = [...sourceNotes.current.values()].some((active) => active.note === entry.note);
+    if (!pitchStillHeld) engine.current.noteOff(entry.note);
+    const displayStillHeld = [...sourceNotes.current.values()].some((active) => active.displayNote === entry.displayNote);
+    if (!displayStillHeld) setHeld((current) => current.filter((n) => n !== entry.displayNote));
+  }, []);
+  const play = useCallback((note: number) => {
+    void playSource(`piano:${note}`, note + octave * 12, 0.82, note);
+  }, [octave, playSource]);
+  const release = useCallback((note: number) => releaseSource(`piano:${note}`), [releaseSource]);
 
   useEffect(() => {
     const keyMap = new Map(notes.map((item) => [item.key.toLowerCase(), item.note]));
     const down = (event: KeyboardEvent) => {
-      if (event.repeat || event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
-      const note = keyMap.get(event.key.toLowerCase());
-      if (note !== undefined) void play(note);
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLInputElement && !["range", "checkbox", "button"].includes(target.type)))) return;
+      const key = event.key.toLowerCase();
+      const note = keyMap.get(key);
+      if (note !== undefined) {
+        event.preventDefault();
+        void playSource(`computer:${key}`, note + octave * 12, 0.82, note);
+      }
     };
     const up = (event: KeyboardEvent) => {
-      const note = keyMap.get(event.key.toLowerCase());
-      if (note !== undefined) release(note);
+      releaseSource(`computer:${event.key.toLowerCase()}`);
+    };
+    const blur = () => {
+      for (const source of [...sourceNotes.current.keys()]) {
+        if (source.startsWith("computer:")) releaseSource(source);
+      }
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
-    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
-  }, [play, release]);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, [octave, playSource, releaseSource]);
 
-  useEffect(() => () => engine.current.allNotesOff(), []);
+  useEffect(() => {
+    const access = midiAccess.current;
+    if (!access) return;
+    const refreshDevices = () => {
+      const inputs = [...access.inputs.values()];
+      setMidiDevices(inputs.filter((input) => input.state !== "disconnected").map((input) => input.name || "Unnamed MIDI keyboard"));
+    };
+    access.onstatechange = () => {
+      for (const input of access.inputs.values()) {
+        if (input.state === "disconnected") {
+          input.onmidimessage = null;
+          for (const source of [...sourceNotes.current.keys()]) {
+            if (source.startsWith(`midi:${input.id}:`)) releaseSource(source);
+          }
+        } else {
+          input.onmidimessage = (event) => {
+            const data = event.data;
+            if (!data) return;
+            const status = data[0];
+            const data1 = data[1];
+            const data2 = data[2];
+            if (status === undefined || data1 === undefined) return;
+            const command = status & 0xf0;
+            const channel = status & 0x0f;
+            const source = `midi:${input.id}:${channel}:${data1}`;
+            if (command === 0x90 && (data2 ?? 0) > 0) {
+              void playSource(source, data1, (data2 ?? 0) / 127, data1);
+            } else if (command === 0x80 || (command === 0x90 && (data2 ?? 0) === 0)) {
+              releaseSource(source);
+            }
+          };
+        }
+      }
+      refreshDevices();
+    };
+    refreshDevices();
+    return () => {
+      access.onstatechange = null;
+      for (const input of access.inputs.values()) input.onmidimessage = null;
+    };
+  }, [midiConnected, playSource, releaseSource]);
+
+  const connectMidi = async () => {
+    const midiNavigator = navigator as MidiNavigator;
+    if (!midiNavigator.requestMIDIAccess) return;
+    try {
+      const access = await midiNavigator.requestMIDIAccess() as MidiAccessLike;
+      midiAccess.current = access;
+      for (const input of access.inputs.values()) {
+        input.onmidimessage = (event) => {
+          const data = event.data;
+          if (!data) return;
+          const status = data[0];
+          const data1 = data[1];
+          const data2 = data[2];
+          if (status === undefined || data1 === undefined) return;
+          const command = status & 0xf0;
+          const channel = status & 0x0f;
+          const source = `midi:${input.id}:${channel}:${data1}`;
+          if (command === 0x90 && (data2 ?? 0) > 0) {
+            void playSource(source, data1, (data2 ?? 0) / 127, data1);
+          } else if (command === 0x80 || (command === 0x90 && (data2 ?? 0) === 0)) {
+            releaseSource(source);
+          }
+        };
+      }
+      setMidiConnected(true);
+      setMidiDevices([...access.inputs.values()].map((input) => input.name || "Unnamed MIDI keyboard"));
+    } catch (error) {
+      console.error("Unable to access MIDI devices", error);
+      setMidiConnected(false);
+    }
+  };
+  const disconnectMidi = () => {
+    const access = midiAccess.current;
+    if (access) {
+      access.onstatechange = null;
+      for (const input of access.inputs.values()) input.onmidimessage = null;
+    }
+    for (const source of [...sourceNotes.current.keys()]) {
+      if (source.startsWith("midi:")) releaseSource(source);
+    }
+    midiAccess.current = null;
+    setMidiDevices([]);
+    setMidiConnected(false);
+  };
+
+  useEffect(() => () => {
+    sourceNotes.current.clear();
+    engine.current.allNotesOff();
+    const access = midiAccess.current;
+    if (access) {
+      access.onstatechange = null;
+      for (const input of access.inputs.values()) input.onmidimessage = null;
+    }
+  }, []);
   const activeCount = held.length;
   const frequencyLabel = useMemo(() => `${Math.round(settings.filter.cutoff).toLocaleString()} Hz`, [settings.filter.cutoff]);
 
@@ -115,7 +256,7 @@ export default function App() {
     <header className="topbar">
       <a className="brand" href="#"><span className="brand-mark"><AudioLines size={19} /></span><span>WEB PLAY <b>SYNTH</b></span></a>
       <div className="topbar-center"><span className="status-dot" /> VIRTUAL ANALOG SYSTEM <span className="topbar-divider">/</span> PATCH 001</div>
-      <div className="top-actions"><button className="icon-button" aria-label="Help" onClick={() => setShowHelp(!showHelp)}><CircleHelp size={18} /></button><button className={`power-button ${powered ? "is-on" : ""}`} onClick={async () => { if (!powered) { await engine.current.start(); setPowered(true); } else { engine.current.allNotesOff(); setHeld([]); } }}><Power size={15} /> {powered ? "AUDIO READY" : "POWER ON"}</button></div>
+      <div className="top-actions"><button className="icon-button" aria-label="Help" onClick={() => setShowHelp(!showHelp)}><CircleHelp size={18} /></button><button className={`power-button ${powered ? "is-on" : ""}`} onClick={async () => { if (!powered) { await engine.current.start(); setPowered(true); } else { sourceNotes.current.clear(); engine.current.allNotesOff(); setHeld([]); } }}><Power size={15} /> {powered ? "AUDIO READY" : "POWER ON"}</button></div>
     </header>
 
     <section className="hero">
@@ -217,8 +358,14 @@ export default function App() {
     <div className="section-kicker"><span>05</span> PERFORMANCE <i /></div>
     <section className="module keyboard-module">
       <div className="keyboard-heading"><div><span className="eyebrow">PLAYABLE INPUT</span><h2>KEYBOARD</h2></div><div className="octave-control"><button onClick={() => setOctave(Math.max(-2, octave - 1))}>−</button><span>OCTAVE <b>{octave > 0 ? "+" : ""}{octave}</b></span><button onClick={() => setOctave(Math.min(2, octave + 1))}>+</button></div></div>
+      <div className="midi-panel">
+        <div><span className="eyebrow">HARDWARE INPUT</span><strong>MIDI KEYBOARD</strong><small>{midiConnected ? `${midiDevices.length} INPUT(S) DETECTED` : "CONNECT A USB OR BLUETOOTH MIDI CONTROLLER"}</small></div>
+        <button className="midi-button" onClick={midiConnected ? disconnectMidi : connectMidi}>{midiConnected ? "DISCONNECT MIDI" : "CONNECT MIDI"}</button>
+        {midiConnected && <span className="midi-device-list">{midiDevices.length ? midiDevices.join(" · ") : "Waiting for MIDI input…"}</span>}
+        {!((navigator as MidiNavigator).requestMIDIAccess) && <span className="midi-unsupported">Web MIDI is unavailable in this browser. Try a Chromium-based browser over HTTPS or localhost.</span>}
+      </div>
       <div className="piano">{notes.filter((n) => !n.black).map((note) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span><small>{note.key}</small></button>{notes.find((n) => n.note === note.note + 1)?.black && <button className={`black-key ${held.includes(note.note + 1) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note + 1); }} onPointerUp={() => release(note.note + 1)} onPointerLeave={() => held.includes(note.note + 1) && release(note.note + 1)}><span>{notes.find((n) => n.note === note.note + 1)!.key}</span></button>}</div>)}</div>
-      <div className="keyboard-footer"><span>COMPUTER KEYBOARD ENABLED</span><span><Volume2 size={14} /> {powered ? "AUDIO ACTIVE" : "PRESS POWER TO ENABLE AUDIO"}</span></div>
+      <div className="keyboard-footer"><span>COMPUTER KEYBOARD ACTIVE · A–K / W E T Y U</span><span><Volume2 size={14} /> {powered ? "AUDIO ACTIVE" : "PRESS POWER TO ENABLE AUDIO"}</span></div>
     </section>
     <footer><span>WEB PLAY SYNTH <b>001</b></span><span>LOCAL AUDIO ENGINE · NO SERVER-SIDE AUDIO</span><span>BUILT FOR EXPERIMENTATION <AudioLines size={13} /></span></footer>
   </main>;
