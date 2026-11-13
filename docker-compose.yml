@@ -1,0 +1,8 @@
+services:
+  web-play-synth:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "${SYNTH_PORT:-4173}:80"
+    restart: unless-stopped
