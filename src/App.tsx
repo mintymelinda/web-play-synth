@@ -6,6 +6,7 @@ const initial: SynthSettings = {
   oscillator1: { waveform: "sawtooth", octave: 0, tune: 0, level: 0.72 },
   oscillator2: { waveform: "square", octave: 0, tune: 7, level: 0.38 },
   filter: { cutoff: 1800, resonance: 0.8, contour: 0.55 },
+  routing: { vco1: true, vco2: true, filterEnv: true, ampEnv: true },
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
