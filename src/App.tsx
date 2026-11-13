@@ -4,7 +4,8 @@ import { SynthEngine, type Envelope, type SynthSettings, type Waveform } from ".
 
 const initial: SynthSettings = {
   oscillator1: { waveform: "sawtooth", octave: 0, tune: 0, level: 0.72 },
-  oscillator2: { waveform: "square", octave: 0, tune: 7, level: 0.38 },
+  oscillator2: { waveform: "square", octave: 0, tune: 7, level: 0.38, hardSync: false, crossMod: 0 },
+  lfo: { waveform: "sine", rate: 4.5, pitchDepth: 0, filterDepth: 0 },
   filter: { cutoff: 1800, resonance: 0.8, contour: 0.55 },
   routing: { vco1: true, vco2: true, filterEnv: true, ampEnv: true },
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
@@ -122,7 +123,7 @@ export default function App() {
       <div className="hero-readout"><span>VOICE STATUS</span><strong>{activeCount ? `${activeCount.toString().padStart(2, "0")} ACTIVE` : "STANDBY"}</strong><small>{powered ? "AUDIO ENGINE RUNNING" : "AWAITING AUDIO ACTIVATION"}</small></div>
     </section>
 
-    {showHelp && <aside className="help-banner"><b>Quick start</b> — Press POWER ON, then play the on-screen keyboard or use A–K (white keys) and W/E/T/Y/U (black keys). Adjust the VCO levels in the mixer and shape the tone with the filter and envelopes.<button onClick={() => setShowHelp(false)}>DISMISS</button></aside>}
+    {showHelp && <aside className="help-banner"><b>Quick start</b> — Press POWER ON, then play the on-screen keyboard or use A–K (white keys) and W/E/T/Y/U (black keys). Shape the tone with the VCOs, filter, envelopes, and LFO modulation controls.<button onClick={() => setShowHelp(false)}>DISMISS</button></aside>}
 
     <div className="section-kicker"><span>01</span> OSCILLATORS & MIXER <i /></div>
     <section className="upper-rack">
@@ -161,7 +162,25 @@ export default function App() {
       <EnvelopePanel title="AMPLIFIER ENVELOPE" value={settings.ampEnvelope} accent="cyan" onChange={(v) => update("ampEnvelope", v)} />
     </section>
 
-    <div className="section-kicker"><span>03</span> MODULAR ROUTING <i /></div>
+    <div className="section-kicker"><span>03</span> LFO & OSCILLATOR MODULATION <i /></div>
+    <section className="module modulation-module">
+      <div className="module-heading"><span className="module-led violet" /><div><span className="eyebrow">LOW FREQUENCY OSCILLATOR</span><h2>MODULATION SOURCE</h2></div><span className="module-index">LFO / 01</span></div>
+      <div className="modulation-controls">
+        <Select label="LFO WAVEFORM" value={settings.lfo.waveform} options={["sine", "triangle", "square", "sawtooth"]} onChange={(v) => update("lfo", { ...settings.lfo, waveform: v as Waveform })} />
+        <div className="knob-row">
+          <Knob label="RATE" value={settings.lfo.rate} min={0.1} max={20} step={0.1} display={(n) => `${n.toFixed(1)} Hz`} onChange={(n) => update("lfo", { ...settings.lfo, rate: n })} />
+          <Knob label="PITCH DEPTH" value={settings.lfo.pitchDepth} min={0} max={25} step={0.1} display={(n) => `${n.toFixed(1)} Hz`} onChange={(n) => update("lfo", { ...settings.lfo, pitchDepth: n })} />
+          <Knob label="FILTER DEPTH" value={settings.lfo.filterDepth} min={0} max={5000} step={10} display={(n) => `${Math.round(n)} Hz`} onChange={(n) => update("lfo", { ...settings.lfo, filterDepth: n })} />
+        </div>
+      </div>
+      <div className="oscillator-modulation">
+        <label className="sync-toggle"><input type="checkbox" checked={settings.oscillator2.hardSync} onChange={(event) => update("oscillator2", { ...settings.oscillator2, hardSync: event.target.checked })} /><span className="toggle-dot violet" /> HARD SYNC <small>VCO 2 RESETS TO VCO 1</small></label>
+        <Knob label="CROSS MOD" value={settings.oscillator2.crossMod} min={0} max={800} step={5} display={(n) => `${Math.round(n)} Hz`} onChange={(n) => update("oscillator2", { ...settings.oscillator2, crossMod: n })} />
+        <p>VCO 2 modulates VCO 1 pitch. Hard sync locks VCO 2's waveform cycle to VCO 1 for bright, cutting harmonics.</p>
+      </div>
+    </section>
+
+    <div className="section-kicker"><span>04</span> MODULAR ROUTING <i /></div>
     <section className="module routing-module">
       <div className="module-heading"><span className="module-led cyan" /><div><span className="eyebrow">PATCH BAY / SIGNAL FLOW</span><h2>ROUTING MATRIX</h2></div><span className="module-index">PATCH / 001</span></div>
       <div className="patchbay">
@@ -195,7 +214,7 @@ export default function App() {
       <p className="routing-footnote">Toggle a connection to patch or unpatch the route. The matrix is the visual representation of the current signal architecture.</p>
     </section>
 
-    <div className="section-kicker"><span>04</span> PERFORMANCE <i /></div>
+    <div className="section-kicker"><span>05</span> PERFORMANCE <i /></div>
     <section className="module keyboard-module">
       <div className="keyboard-heading"><div><span className="eyebrow">PLAYABLE INPUT</span><h2>KEYBOARD</h2></div><div className="octave-control"><button onClick={() => setOctave(Math.max(-2, octave - 1))}>−</button><span>OCTAVE <b>{octave > 0 ? "+" : ""}{octave}</b></span><button onClick={() => setOctave(Math.min(2, octave + 1))}>+</button></div></div>
       <div className="piano">{notes.filter((n) => !n.black).map((note) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span><small>{note.key}</small></button>{notes.find((n) => n.note === note.note + 1)?.black && <button className={`black-key ${held.includes(note.note + 1) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note + 1); }} onPointerUp={() => release(note.note + 1)} onPointerLeave={() => held.includes(note.note + 1) && release(note.note + 1)}><span>{notes.find((n) => n.note === note.note + 1)!.key}</span></button>}</div>)}</div>
