@@ -100,11 +100,11 @@ export default function App() {
   }, []);
   const playSource = useCallback(async (source: string, note: number, velocity = 0.82, displayNote = note) => {
     if (sourceNotes.current.has(source)) return;
-    await engine.current.start();
-    if (sourceNotes.current.has(source)) return;
-    const pitchAlreadyHeld = [...sourceNotes.current.values()].some((entry) => entry.note === note);
     sourceNotes.current.set(source, { note, displayNote });
-    if (!pitchAlreadyHeld) engine.current.noteOn(note, velocity);
+    await engine.current.start();
+    const pitchIsStillHeld = [...sourceNotes.current.values()].some((entry) => entry.note === note);
+    if (!pitchIsStillHeld) return;
+    engine.current.noteOn(note, velocity);
     setPowered(true);
     setHeld((current) => current.includes(displayNote) ? current : [...current, displayNote]);
   }, []);
