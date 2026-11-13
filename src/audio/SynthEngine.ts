@@ -9,8 +9,9 @@ export interface Envelope {
 
 export interface SynthSettings {
   oscillator1: { waveform: Waveform; octave: number; tune: number; level: number };
-  oscillator2: { waveform: Waveform; octave: number; tune: number; level: number };
+  oscillator2: { waveform: Waveform; octave: number; tune: number; level: number; hardSync: boolean; crossMod: number };
   filter: { cutoff: number; resonance: number; contour: number };
+  lfo: { waveform: Waveform; rate: number; pitchDepth: number; filterDepth: number };
   filterEnvelope: Envelope;
   ampEnvelope: Envelope;
   master: number;
@@ -18,8 +19,12 @@ export interface SynthSettings {
 }
 
 interface Voice {
-  oscillators: OscillatorNode[];
-  oscillatorGains: GainNode[];
+  oscillators: [OscillatorNode, OscillatorNode];
+  oscillatorGains: [GainNode, GainNode];
+  lfo: OscillatorNode;
+  lfoPitchGain: GainNode;
+  lfoFilterGain: GainNode;
+  crossModGain: GainNode;
   filter: BiquadFilterNode;
   amp: GainNode;
   voiceGain: GainNode;
@@ -30,8 +35,9 @@ interface Voice {
 
 const DEFAULT_SETTINGS: SynthSettings = {
   oscillator1: { waveform: "sawtooth", octave: 0, tune: 0, level: 0.72 },
-  oscillator2: { waveform: "square", octave: 0, tune: 7, level: 0.38 },
+  oscillator2: { waveform: "square", octave: 0, tune: 7, level: 0.38, hardSync: false, crossMod: 0 },
   filter: { cutoff: 1800, resonance: 0.8, contour: 0.55 },
+  lfo: { waveform: "sine", rate: 4.5, pitchDepth: 0, filterDepth: 0 },
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
@@ -41,10 +47,38 @@ const DEFAULT_SETTINGS: SynthSettings = {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+function createHardSyncWave(context: AudioContext, ratio: number) {
+  const sampleCount = 2048;
+  const harmonicCount = 96;
+  const real = new Float32Array(harmonicCount + 1);
+  const imag = new Float32Array(harmonicCount + 1);
+  const samples = new Float32Array(sampleCount);
+
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    const phase = sample / sampleCount;
+    samples[sample] = 2 * ((phase * ratio) % 1) - 1;
+  }
+
+  for (let harmonic = 1; harmonic <= harmonicCount; harmonic += 1) {
+    let cosine = 0;
+    let sine = 0;
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const angle = (2 * Math.PI * harmonic * sample) / sampleCount;
+      cosine += samples[sample] * Math.cos(angle);
+      sine += samples[sample] * Math.sin(angle);
+    }
+    real[harmonic] = (2 * cosine) / sampleCount;
+    imag[harmonic] = (2 * sine) / sampleCount;
+  }
+
+  return context.createPeriodicWave(real, imag, { disableNormalization: false });
+}
+
 export class SynthEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private voices = new Map<number, Voice>();
+  private syncWaves = new Map<number, PeriodicWave>();
   private settings: SynthSettings = structuredClone(DEFAULT_SETTINGS);
 
   get isReady() {
@@ -76,36 +110,53 @@ export class SynthEngine {
     const voiceGain = context.createGain();
     const filter = context.createBiquadFilter();
     const amp = context.createGain();
+    const oscillator1 = context.createOscillator();
+    const oscillator2 = context.createOscillator();
+    const gain1 = context.createGain();
+    const gain2 = context.createGain();
+    const lfo = context.createOscillator();
+    const lfoPitchGain = context.createGain();
+    const lfoFilterGain = context.createGain();
+    const crossModGain = context.createGain();
+
     filter.type = "lowpass";
     filter.Q.value = this.settings.filter.resonance;
     amp.gain.setValueAtTime(0, now);
     voiceGain.gain.value = 1;
 
-    const configs = [this.settings.oscillator1, this.settings.oscillator2];
-    const oscillators: OscillatorNode[] = [];
-    const oscillatorGains: GainNode[] = [];
-    for (const config of configs) {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = config.waveform;
-      oscillator.frequency.value = 440 * 2 ** ((note - 69 + config.octave * 12 + config.tune) / 12);
-      gain.gain.value = config.level;
-      oscillator.connect(gain);
-      oscillator.start(now);
-      oscillators.push(oscillator);
-      oscillatorGains.push(gain);
-    }
+    oscillator1.connect(gain1);
+    oscillator2.connect(gain2);
+    oscillator2.connect(crossModGain);
+    crossModGain.connect(oscillator1.frequency);
+    lfo.connect(lfoPitchGain);
+    lfoPitchGain.connect(oscillator1.frequency);
+    lfoPitchGain.connect(oscillator2.frequency);
+    lfo.connect(lfoFilterGain);
+    lfoFilterGain.connect(filter.frequency);
 
     voiceGain.connect(filter);
     filter.connect(amp);
     amp.connect(this.master);
-    const voice: Voice = { oscillators, oscillatorGains, filter, amp, voiceGain, note, released: false, connected: [false, false] };
+
+    const voice: Voice = {
+      oscillators: [oscillator1, oscillator2],
+      oscillatorGains: [gain1, gain2],
+      lfo,
+      lfoPitchGain,
+      lfoFilterGain,
+      crossModGain,
+      filter,
+      amp,
+      voiceGain,
+      note,
+      released: false,
+      connected: [false, false],
+    };
     this.voices.set(note, voice);
     this.updateVoice(voice);
 
     const ampEnv = this.settings.ampEnvelope;
     const filterEnv = this.settings.filterEnvelope;
-    amp.gain.cancelScheduledValues(now);
     if (this.settings.routing.ampEnv) {
       amp.gain.setValueAtTime(0, now);
       amp.gain.linearRampToValueAtTime(velocity, now + ampEnv.attack);
@@ -114,7 +165,6 @@ export class SynthEngine {
       amp.gain.setValueAtTime(velocity, now);
     }
 
-    filter.frequency.cancelScheduledValues(now);
     filter.frequency.setValueAtTime(clamp(this.settings.filter.cutoff, 30, 18000), now);
     if (this.settings.routing.filterEnv) {
       const peak = this.settings.filter.cutoff * 2 ** (this.settings.filter.contour * 3);
@@ -124,6 +174,9 @@ export class SynthEngine {
         now + filterEnv.attack + filterEnv.decay,
       );
     }
+
+    for (const oscillator of voice.oscillators) oscillator.start(now);
+    lfo.start(now);
   }
 
   noteOff(note: number) {
@@ -133,6 +186,7 @@ export class SynthEngine {
     const now = this.context.currentTime;
     const amp = this.settings.ampEnvelope;
     const filter = this.settings.filterEnvelope;
+
     voice.amp.gain.cancelScheduledValues(now);
     voice.amp.gain.setValueAtTime(voice.amp.gain.value, now);
     voice.amp.gain.linearRampToValueAtTime(0, now + (this.settings.routing.ampEnv ? amp.release : 0.02));
@@ -142,9 +196,17 @@ export class SynthEngine {
       now,
       Math.max(0.01, filter.release / 5),
     );
+
     const stopAt = now + Math.max(amp.release, filter.release) + 0.08;
     for (const oscillator of voice.oscillators) oscillator.stop(stopAt);
+    voice.lfo.stop(stopAt);
     window.setTimeout(() => {
+      voice.oscillators.forEach((oscillator) => oscillator.disconnect());
+      voice.oscillatorGains.forEach((gain) => gain.disconnect());
+      voice.lfo.disconnect();
+      voice.lfoPitchGain.disconnect();
+      voice.lfoFilterGain.disconnect();
+      voice.crossModGain.disconnect();
       voice.voiceGain.disconnect();
       voice.filter.disconnect();
       voice.amp.disconnect();
@@ -156,11 +218,37 @@ export class SynthEngine {
     for (const note of this.voices.keys()) this.noteOff(note);
   }
 
+  private getHardSyncWave(ratio: number) {
+    if (!this.context) throw new Error("Audio context is unavailable");
+    const key = Math.round(clamp(ratio, 0.25, 8) * 1000) / 1000;
+    let wave = this.syncWaves.get(key);
+    if (!wave) {
+      wave = createHardSyncWave(this.context, key);
+      this.syncWaves.set(key, wave);
+    }
+    return wave;
+  }
+
   private updateVoice(voice: Voice) {
     if (!this.context) return;
-    const configs = [this.settings.oscillator1, this.settings.oscillator2];
+    const now = this.context.currentTime;
+    const { oscillator1, oscillator2, lfo, filter } = this.settings;
+    const baseFrequency1 = 440 * 2 ** ((voice.note - 69 + oscillator1.octave * 12 + oscillator1.tune) / 12);
+    const baseFrequency2 = 440 * 2 ** ((voice.note - 69 + oscillator2.octave * 12 + oscillator2.tune) / 12);
+    const syncRatio = baseFrequency2 / baseFrequency1;
+
+    voice.oscillators[0].type = oscillator1.waveform;
+    voice.oscillators[0].frequency.setTargetAtTime(baseFrequency1, now, 0.015);
+    if (oscillator2.hardSync) {
+      voice.oscillators[1].setPeriodicWave(this.getHardSyncWave(syncRatio));
+      voice.oscillators[1].frequency.setTargetAtTime(baseFrequency1, now, 0.015);
+    } else {
+      voice.oscillators[1].type = oscillator2.waveform;
+      voice.oscillators[1].frequency.setTargetAtTime(baseFrequency2, now, 0.015);
+    }
+
+    const configs = [oscillator1, oscillator2];
     configs.forEach((config, index) => {
-      const oscillator = voice.oscillators[index];
       const routeEnabled = index === 0 ? this.settings.routing.vco1 : this.settings.routing.vco2;
       if (routeEnabled && !voice.connected[index]) {
         voice.oscillatorGains[index].connect(voice.voiceGain);
@@ -169,15 +257,15 @@ export class SynthEngine {
         voice.oscillatorGains[index].disconnect(voice.voiceGain);
         voice.connected[index] = false;
       }
-      oscillator.type = config.waveform;
-      oscillator.frequency.setTargetAtTime(
-        440 * 2 ** ((voice.note - 69 + config.octave * 12 + config.tune) / 12),
-        this.context!.currentTime,
-        0.015,
-      );
-      voice.oscillatorGains[index].gain.setTargetAtTime(config.level, this.context!.currentTime, 0.015);
+      voice.oscillatorGains[index].gain.setTargetAtTime(config.level, now, 0.015);
     });
-    voice.filter.Q.setTargetAtTime(this.settings.filter.resonance, this.context.currentTime, 0.015);
-    if (!this.settings.routing.filterEnv) voice.filter.frequency.setTargetAtTime(this.settings.filter.cutoff, this.context.currentTime, 0.015);
+
+    voice.crossModGain.gain.setTargetAtTime(oscillator2.crossMod, now, 0.015);
+    voice.lfo.type = lfo.waveform;
+    voice.lfo.frequency.setTargetAtTime(lfo.rate, now, 0.015);
+    voice.lfoPitchGain.gain.setTargetAtTime(lfo.pitchDepth, now, 0.015);
+    voice.lfoFilterGain.gain.setTargetAtTime(lfo.filterDepth, now, 0.015);
+    voice.filter.Q.setTargetAtTime(filter.resonance, now, 0.015);
+    if (!this.settings.routing.filterEnv) voice.filter.frequency.setTargetAtTime(filter.cutoff, now, 0.015);
   }
 }
