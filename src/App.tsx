@@ -351,9 +351,29 @@ export default function App() {
             </div>
           </div>
         </div>
+        <div className="route-group route-group-modulation">
+          <div className="route-group-heading"><span className="route-group-index">C</span><div><strong>OSCILLATOR & LFO MODULATION</strong><small>Depth controls live in the LFO and VCO 2 modules</small></div></div>
+          <div className="route-list">
+            <div className={"route-row " + (settings.lfo.pitchDepth > 0 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot violet" /> LFO</span><span className="route-type">PITCH</span><span className="route-destination">VCO 1 + VCO 2</span>
+              <span className={"route-state " + (settings.lfo.pitchDepth > 0 ? "is-active" : "")}>{settings.lfo.pitchDepth > 0 ? `ACTIVE · ±${settings.lfo.pitchDepth.toFixed(1)} Hz` : "DEPTH 0"}</span>
+            </div>
+            <div className={"route-row " + (settings.lfo.filterDepth > 0 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot violet" /> LFO</span><span className="route-type">CUTOFF</span><span className="route-destination">VCF FREQUENCY</span>
+              <span className={"route-state " + (settings.lfo.filterDepth > 0 ? "is-active" : "")}>{settings.lfo.filterDepth > 0 ? `ACTIVE · ${settings.lfo.filterDepth.toFixed(0)} Hz` : "DEPTH 0"}</span>
+            </div>
+            <div className={"route-row " + (settings.oscillator2.crossMod > 0 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot cyan" /> VCO 2</span><span className="route-type">FM</span><span className="route-destination">VCO 1 FREQUENCY</span>
+              <span className={"route-state " + (settings.oscillator2.crossMod > 0 ? "is-active" : "")}>{settings.oscillator2.crossMod > 0 ? `ACTIVE · ${settings.oscillator2.crossMod.toFixed(0)} Hz` : "DEPTH 0"}</span>
+            </div>
+            <div className={"route-row " + (settings.oscillator2.hardSync ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot cyan" /> VCO 1</span><span className="route-type">SYNC</span><span className="route-destination">RESETS VCO 2</span>
+              <span className={"route-state " + (settings.oscillator2.hardSync ? "is-active" : "")}>{settings.oscillator2.hardSync ? "ENABLED" : "DISABLED"}</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <p className="routing-footnote">The audio path always runs Mixer → VCF → VCA → Output. Switches above control the two oscillator inputs and the two envelope modulation connections.</p>
-      <p className="routing-footnote">Toggle a connection to patch or unpatch the route. The matrix is the visual representation of the current signal architecture.</p>
+      <p className="routing-footnote">The top line is the fixed audio path. Audio and envelope switches change connections; modulation rows show whether their depth or sync controls are currently engaged.</p>
     </section>
 
     <div className="section-kicker"><span>05</span> PERFORMANCE <i /></div>
