@@ -4,6 +4,19 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Load persistent local deployment settings; explicit environment values win.
+_cli_synth_data_dir="${SYNTH_DATA_DIR-}"
+_cli_synth_port="${SYNTH_PORT-}"
+if [[ -f "$ROOT_DIR/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$ROOT_DIR/.env"
+    set +a
+fi
+[[ -z "$_cli_synth_data_dir" ]] || SYNTH_DATA_DIR="$_cli_synth_data_dir"
+[[ -z "$_cli_synth_port" ]] || SYNTH_PORT="$_cli_synth_port"
+unset _cli_synth_data_dir _cli_synth_port
+
 DATA_DIR="${SYNTH_DATA_DIR:-$ROOT_DIR/data}"
 # Support both the Docker Compose plugin and Synology's standalone v1 CLI.
 if docker compose version >/dev/null 2>&1; then
