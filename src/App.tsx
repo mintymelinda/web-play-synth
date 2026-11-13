@@ -189,7 +189,7 @@ export default function App() {
       access.onstatechange = null;
       for (const input of access.inputs.values()) input.onmidimessage = null;
     };
-  }, [playSource, releaseSource]);
+  }, [midiConnected, playSource, releaseSource]);
 
   const connectMidi = async () => {
     const midiNavigator = navigator as MidiNavigator;
