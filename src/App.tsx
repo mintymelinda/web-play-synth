@@ -63,6 +63,17 @@ export default function App() {
   const routing = settings.routing;
   const [octave, setOctave] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [dragSource, setDragSource] = useState<string | null>(null);
+  const [patchMessage, setPatchMessage] = useState("Drag a source jack onto a destination to make a connection.");
+
+  const connectPatch = (destination: string, source: string | null = dragSource) => {
+    if (!source) return;
+    const routes: Record<string, keyof SynthSettings["routing"]> = { "vco1:mixer": "vco1", "vco2:mixer": "vco2", "filterEnv:vcf": "filterEnv", "ampEnv:vca": "ampEnv" };
+    const route = routes[`${source}:${destination}`];
+    if (route) { update("routing", { ...settings.routing, [route]: true }); setPatchMessage(`${source.toUpperCase()} connected to ${destination.toUpperCase()}.`); }
+    else setPatchMessage("That connection is not supported by this patchbay yet.");
+    setDragSource(null);
+  };
 
   useEffect(() => { engine.current.update(settings); }, [settings]);
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
@@ -154,10 +165,27 @@ export default function App() {
     <section className="module routing-module">
       <div className="module-heading"><span className="module-led cyan" /><div><span className="eyebrow">PATCH BAY / SIGNAL FLOW</span><h2>ROUTING MATRIX</h2></div><span className="module-index">PATCH / 001</span></div>
       <div className="patchbay">
-        <div className="patch-column"><span className="patch-label">SOURCES</span><div className="patch-node cyan-node"><span className="port" /> VCO 01 <small>AUDIO</small></div><div className="patch-node violet-node"><span className="port" /> VCO 02 <small>AUDIO</small></div><div className="patch-node violet-node"><span className="port" /> FILTER ENV <small>CV</small></div><div className="patch-node cyan-node"><span className="port" /> AMP ENV <small>CV</small></div></div>
-        <div className="patch-cables"><svg viewBox="0 0 420 230" preserveAspectRatio="none"><path className={routing.vco1 ? "cable cable-cyan" : "cable cable-muted"} d="M0 35 C150 35 150 85 420 85" /><path className={routing.vco2 ? "cable cable-violet" : "cable cable-muted"} d="M0 85 C150 85 150 85 420 85" /><path className={routing.filterEnv ? "cable cable-violet modulation" : "cable cable-muted"} d="M0 135 C150 135 150 40 420 40" /><path className={routing.ampEnv ? "cable cable-cyan modulation" : "cable cable-muted"} d="M0 185 C150 185 150 145 420 145" /></svg><span className="cable-caption">PATCH CONNECTIONS</span></div>
-        <div className="patch-column destinations"><span className="patch-label">DESTINATIONS</span><div className="patch-node amber-node"><span className="port" /> MIXER <small>AUDIO IN</small></div><div className="patch-node amber-node"><span className="port" /> VCF <small>CUTOFF CV</small></div><div className="patch-node amber-node"><span className="port" /> VCA <small>GAIN CV</small></div></div>
+        <div className="patch-column">
+          <span className="patch-label">SOURCES <small>DRAG A JACK</small></span>
+          <div className={`patch-node cyan-node draggable-node ${dragSource === "vco1" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "vco1"); setDragSource("vco1"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> VCO 01 <small>AUDIO</small></div>
+          <div className={`patch-node violet-node draggable-node ${dragSource === "vco2" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "vco2"); setDragSource("vco2"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> VCO 02 <small>AUDIO</small></div>
+          <div className={`patch-node violet-node draggable-node ${dragSource === "filterEnv" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "filterEnv"); setDragSource("filterEnv"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> FILTER ENV <small>CV</small></div>
+          <div className={`patch-node cyan-node draggable-node ${dragSource === "ampEnv" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "ampEnv"); setDragSource("ampEnv"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> AMP ENV <small>CV</small></div>
+        </div>
+        <div className="patch-cables"><svg viewBox="0 0 420 230" preserveAspectRatio="none" aria-label="Live patch cable connections">
+          <path className={routing.vco1 ? "cable cable-cyan" : "cable cable-muted"} d="M0 35 C150 35 150 85 420 85" />
+          <path className={routing.vco2 ? "cable cable-violet" : "cable cable-muted"} d="M0 85 C150 85 150 85 420 85" />
+          <path className={routing.filterEnv ? "cable cable-violet modulation" : "cable cable-muted"} d="M0 135 C150 135 150 40 420 40" />
+          <path className={routing.ampEnv ? "cable cable-cyan modulation" : "cable cable-muted"} d="M0 185 C150 185 150 145 420 145" />
+        </svg><span className="cable-caption">PATCH CONNECTIONS</span></div>
+        <div className="patch-column destinations">
+          <span className="patch-label">DESTINATIONS <small>DROP TO CONNECT</small></span>
+          <div className={`patch-node amber-node drop-target ${dragSource ? "can-receive" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); connectPatch("mixer", event.dataTransfer.getData("text/plain") || dragSource); }} onDoubleClick={() => { update("routing", { ...routing, vco1: false, vco2: false }); setPatchMessage("Mixer audio inputs disconnected."); }}><span className="port" /> MIXER <small>{routing.vco1 || routing.vco2 ? "CONNECTED" : "AUDIO IN"}</small></div>
+          <div className={`patch-node amber-node drop-target ${dragSource ? "can-receive" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); connectPatch("vcf", event.dataTransfer.getData("text/plain") || dragSource); }} onDoubleClick={() => { update("routing", { ...routing, filterEnv: false }); setPatchMessage("Filter envelope disconnected."); }}><span className="port" /> VCF <small>{routing.filterEnv ? "CONNECTED" : "CUTOFF CV"}</small></div>
+          <div className={`patch-node amber-node drop-target ${dragSource ? "can-receive" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); connectPatch("vca", event.dataTransfer.getData("text/plain") || dragSource); }} onDoubleClick={() => { update("routing", { ...routing, ampEnv: false }); setPatchMessage("Amplifier envelope disconnected."); }}><span className="port" /> VCA <small>{routing.ampEnv ? "CONNECTED" : "GAIN CV"}</small></div>
+        </div>
       </div>
+      <p className="patch-status" role="status">{patchMessage} <span>Double-click a destination to disconnect its inputs.</span></p>
       <div className="route-toggles">
         <label><input type="checkbox" checked={routing.vco1} onChange={(e) => update("routing", { ...routing, vco1: e.target.checked })} /><span className="toggle-dot cyan" /> VCO 1 → MIXER</label>
         <label><input type="checkbox" checked={routing.vco2} onChange={(e) => update("routing", { ...routing, vco2: e.target.checked })} /><span className="toggle-dot violet" /> VCO 2 → MIXER</label>
