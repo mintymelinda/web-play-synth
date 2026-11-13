@@ -12,10 +12,18 @@ bash scripts/deploy.sh
 
 Open [http://localhost:4173](http://localhost:4173). Set `SYNTH_PORT` to change the host port.
 
-For a Synology deployment, keep release data outside the repository and pass its persistent path:
+For a Synology deployment, configure the paths once in a local `.env` file in the project directory:
 
 ```sh
-SYNTH_DATA_DIR=/volume1/docker/web-play-synth/data SYNTH_PORT=4173 bash scripts/deploy.sh
+cp .env.example .env
+# Edit .env if your project or data directory differs.
+```
+
+Docker Compose reads this file automatically, and the deploy/rollback scripts load it too. It is git-ignored, so your NAS-specific paths stay on the NAS. After that, updates are simply:
+
+```sh
+git pull --ff-only origin main
+bash scripts/deploy.sh
 ```
 
 The deploy script builds the app inside Docker (Node.js 22 is not required on the NAS host), stages the output, verifies the generated entry point and referenced assets, and smoke-tests it with Nginx. It then copies fingerprinted assets into a shared directory and atomically switches the `current` release symlink. The existing Nginx container is not restarted for normal application releases.
@@ -25,7 +33,7 @@ Old hashed assets are intentionally retained. A browser tab that loaded the prev
 The previous release is retained for rollback:
 
 ```sh
-SYNTH_DATA_DIR=/volume1/docker/web-play-synth/data bash scripts/rollback.sh
+bash scripts/rollback.sh
 ```
 
 Do not delete files from the shared `assets` directory during routine deployments. The release directories and previous-release pointer are stored under `SYNTH_DATA_DIR` (default: `./data`).
