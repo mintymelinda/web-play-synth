@@ -97,7 +97,7 @@ export class SynthEngine {
     voiceGain.connect(filter);
     filter.connect(amp);
     amp.connect(this.master);
-    const voice: Voice = { oscillators, oscillatorGains, filter, amp, voiceGain, note, released: false };
+    const voice: Voice = { oscillators, oscillatorGains, filter, amp, voiceGain, note, released: false, connected: [false, false] };
     this.voices.set(note, voice);
     this.updateVoice(voice);
 
