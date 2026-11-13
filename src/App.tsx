@@ -78,21 +78,10 @@ export default function App() {
   const routing = settings.routing;
   const [octave, setOctave] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
-  const [dragSource, setDragSource] = useState<string | null>(null);
-  const [patchMessage, setPatchMessage] = useState("Drag a source jack onto a destination to make a connection.");
   const [midiDevices, setMidiDevices] = useState<string[]>([]);
   const [midiConnected, setMidiConnected] = useState(false);
   const sourceNotes = useRef(new Map<string, { note: number; displayNote: number }>());
   const midiAccess = useRef<MidiAccessLike | null>(null);
-
-  const connectPatch = (destination: string, source: string | null = dragSource) => {
-    if (!source) return;
-    const routes: Record<string, keyof SynthSettings["routing"]> = { "vco1:mixer": "vco1", "vco2:mixer": "vco2", "filterEnv:vcf": "filterEnv", "ampEnv:vca": "ampEnv" };
-    const route = routes[`${source}:${destination}`];
-    if (route) { update("routing", { ...settings.routing, [route]: true }); setPatchMessage(`${source.toUpperCase()} connected to ${destination.toUpperCase()}.`); }
-    else setPatchMessage("That connection is not supported by this patchbay yet.");
-    setDragSource(null);
-  };
 
   useEffect(() => { engine.current.update(settings); }, [settings]);
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
@@ -324,35 +313,67 @@ export default function App() {
     <div className="section-kicker"><span>04</span> MODULAR ROUTING <i /></div>
     <section className="module routing-module">
       <div className="module-heading"><span className="module-led cyan" /><div><span className="eyebrow">PATCH BAY / SIGNAL FLOW</span><h2>ROUTING MATRIX</h2></div><span className="module-index">PATCH / 001</span></div>
-      <div className="patchbay">
-        <div className="patch-column">
-          <span className="patch-label">SOURCES <small>DRAG A JACK</small></span>
-          <div className={`patch-node cyan-node draggable-node ${dragSource === "vco1" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "vco1"); setDragSource("vco1"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> VCO 01 <small>AUDIO</small></div>
-          <div className={`patch-node violet-node draggable-node ${dragSource === "vco2" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "vco2"); setDragSource("vco2"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> VCO 02 <small>AUDIO</small></div>
-          <div className={`patch-node violet-node draggable-node ${dragSource === "filterEnv" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "filterEnv"); setDragSource("filterEnv"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> FILTER ENV <small>CV</small></div>
-          <div className={`patch-node cyan-node draggable-node ${dragSource === "ampEnv" ? "is-dragging" : ""}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", "ampEnv"); setDragSource("ampEnv"); }} onDragEnd={() => setDragSource(null)}><span className="port" /> AMP ENV <small>CV</small></div>
+      <div className="signal-flow" aria-label="Main audio signal path">
+        <div className="signal-stage"><span>01</span><strong>OSCILLATORS</strong><small>VCO 1 + VCO 2</small></div>
+        <span className="signal-arrow">→</span>
+        <div className="signal-stage"><span>02</span><strong>MIXER</strong><small>Audio sum</small></div>
+        <span className="signal-arrow">→</span>
+        <div className="signal-stage"><span>03</span><strong>VCF</strong><small>Low-pass filter</small></div>
+        <span className="signal-arrow">→</span>
+        <div className="signal-stage"><span>04</span><strong>VCA</strong><small>Final level</small></div>
+        <span className="signal-arrow">→</span>
+        <div className="signal-output"><span className="output-led" /> OUTPUT</div>
+      </div>
+      <div className="route-groups">
+        <div className="route-group">
+          <div className="route-group-heading"><span className="route-group-index">A</span><div><strong>AUDIO CONNECTIONS</strong><small>Oscillators feed the mixer</small></div></div>
+          <div className="route-list">
+            <div className={"route-row " + (routing.vco1 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot cyan" /> VCO 01</span><span className="route-type">AUDIO</span><span className="route-destination">MIXER INPUT 1</span>
+              <button className="route-switch" aria-pressed={routing.vco1} onClick={() => update("routing", { ...routing, vco1: !routing.vco1 })}>{routing.vco1 ? "CONNECTED" : "BYPASSED"}</button>
+            </div>
+            <div className={"route-row " + (routing.vco2 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot violet" /> VCO 02</span><span className="route-type">AUDIO</span><span className="route-destination">MIXER INPUT 2</span>
+              <button className="route-switch" aria-pressed={routing.vco2} onClick={() => update("routing", { ...routing, vco2: !routing.vco2 })}>{routing.vco2 ? "CONNECTED" : "BYPASSED"}</button>
+            </div>
+          </div>
         </div>
-        <div className="patch-cables"><svg viewBox="0 0 420 230" preserveAspectRatio="none" aria-label="Live patch cable connections">
-          <path className={routing.vco1 ? "cable cable-cyan" : "cable cable-muted"} d="M0 35 C150 35 150 85 420 85" />
-          <path className={routing.vco2 ? "cable cable-violet" : "cable cable-muted"} d="M0 85 C150 85 150 85 420 85" />
-          <path className={routing.filterEnv ? "cable cable-violet modulation" : "cable cable-muted"} d="M0 135 C150 135 150 40 420 40" />
-          <path className={routing.ampEnv ? "cable cable-cyan modulation" : "cable cable-muted"} d="M0 185 C150 185 150 145 420 145" />
-        </svg><span className="cable-caption">PATCH CONNECTIONS</span></div>
-        <div className="patch-column destinations">
-          <span className="patch-label">DESTINATIONS <small>DROP TO CONNECT</small></span>
-          <div className={`patch-node amber-node drop-target ${dragSource ? "can-receive" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); connectPatch("mixer", event.dataTransfer.getData("text/plain") || dragSource); }} onDoubleClick={() => { update("routing", { ...routing, vco1: false, vco2: false }); setPatchMessage("Mixer audio inputs disconnected."); }}><span className="port" /> MIXER <small>{routing.vco1 || routing.vco2 ? "CONNECTED" : "AUDIO IN"}</small></div>
-          <div className={`patch-node amber-node drop-target ${dragSource ? "can-receive" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); connectPatch("vcf", event.dataTransfer.getData("text/plain") || dragSource); }} onDoubleClick={() => { update("routing", { ...routing, filterEnv: false }); setPatchMessage("Filter envelope disconnected."); }}><span className="port" /> VCF <small>{routing.filterEnv ? "CONNECTED" : "CUTOFF CV"}</small></div>
-          <div className={`patch-node amber-node drop-target ${dragSource ? "can-receive" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); connectPatch("vca", event.dataTransfer.getData("text/plain") || dragSource); }} onDoubleClick={() => { update("routing", { ...routing, ampEnv: false }); setPatchMessage("Amplifier envelope disconnected."); }}><span className="port" /> VCA <small>{routing.ampEnv ? "CONNECTED" : "GAIN CV"}</small></div>
+        <div className="route-group">
+          <div className="route-group-heading"><span className="route-group-index">B</span><div><strong>ENVELOPE CONTROL VOLTAGE</strong><small>Envelopes shape filter cutoff and amplifier level</small></div></div>
+          <div className="route-list">
+            <div className={"route-row " + (routing.filterEnv ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot violet" /> FILTER ENV</span><span className="route-type">CV</span><span className="route-destination">VCF CUTOFF</span>
+              <button className="route-switch" aria-pressed={routing.filterEnv} onClick={() => update("routing", { ...routing, filterEnv: !routing.filterEnv })}>{routing.filterEnv ? "CONNECTED" : "BYPASSED"}</button>
+            </div>
+            <div className={"route-row " + (routing.ampEnv ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot cyan" /> AMP ENV</span><span className="route-type">CV</span><span className="route-destination">VCA LEVEL</span>
+              <button className="route-switch" aria-pressed={routing.ampEnv} onClick={() => update("routing", { ...routing, ampEnv: !routing.ampEnv })}>{routing.ampEnv ? "CONNECTED" : "BYPASSED"}</button>
+            </div>
+          </div>
+        </div>
+        <div className="route-group route-group-modulation">
+          <div className="route-group-heading"><span className="route-group-index">C</span><div><strong>OSCILLATOR & LFO MODULATION</strong><small>Depth controls live in the LFO and VCO 2 modules</small></div></div>
+          <div className="route-list">
+            <div className={"route-row " + (settings.lfo.pitchDepth > 0 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot violet" /> LFO</span><span className="route-type">PITCH</span><span className="route-destination">VCO 1 + VCO 2</span>
+              <span className={"route-state " + (settings.lfo.pitchDepth > 0 ? "is-active" : "")}>{settings.lfo.pitchDepth > 0 ? `ACTIVE · ±${settings.lfo.pitchDepth.toFixed(1)} Hz` : "DEPTH 0"}</span>
+            </div>
+            <div className={"route-row " + (settings.lfo.filterDepth > 0 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot violet" /> LFO</span><span className="route-type">CUTOFF</span><span className="route-destination">VCF FREQUENCY</span>
+              <span className={"route-state " + (settings.lfo.filterDepth > 0 ? "is-active" : "")}>{settings.lfo.filterDepth > 0 ? `ACTIVE · ${settings.lfo.filterDepth.toFixed(0)} Hz` : "DEPTH 0"}</span>
+            </div>
+            <div className={"route-row " + (settings.oscillator2.crossMod > 0 ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot cyan" /> VCO 2</span><span className="route-type">FM</span><span className="route-destination">VCO 1 FREQUENCY</span>
+              <span className={"route-state " + (settings.oscillator2.crossMod > 0 ? "is-active" : "")}>{settings.oscillator2.crossMod > 0 ? `ACTIVE · ${settings.oscillator2.crossMod.toFixed(0)} Hz` : "DEPTH 0"}</span>
+            </div>
+            <div className={"route-row " + (settings.oscillator2.hardSync ? "is-connected" : "")}>
+              <span className="route-source"><i className="route-dot cyan" /> VCO 1</span><span className="route-type">SYNC</span><span className="route-destination">RESETS VCO 2</span>
+              <span className={"route-state " + (settings.oscillator2.hardSync ? "is-active" : "")}>{settings.oscillator2.hardSync ? "ENABLED" : "DISABLED"}</span>
+            </div>
+          </div>
         </div>
       </div>
-      <p className="patch-status" role="status">{patchMessage} <span>Double-click a destination to disconnect its inputs.</span></p>
-      <div className="route-toggles">
-        <label><input type="checkbox" checked={routing.vco1} onChange={(e) => update("routing", { ...routing, vco1: e.target.checked })} /><span className="toggle-dot cyan" /> VCO 1 → MIXER</label>
-        <label><input type="checkbox" checked={routing.vco2} onChange={(e) => update("routing", { ...routing, vco2: e.target.checked })} /><span className="toggle-dot violet" /> VCO 2 → MIXER</label>
-        <label><input type="checkbox" checked={routing.filterEnv} onChange={(e) => update("routing", { ...routing, filterEnv: e.target.checked })} /><span className="toggle-dot violet" /> FILTER ENV → CUTOFF</label>
-        <label><input type="checkbox" checked={routing.ampEnv} onChange={(e) => update("routing", { ...routing, ampEnv: e.target.checked })} /><span className="toggle-dot cyan" /> AMP ENV → VCA</label>
-      </div>
-      <p className="routing-footnote">Toggle a connection to patch or unpatch the route. The matrix is the visual representation of the current signal architecture.</p>
+      <p className="routing-footnote">The top line is the fixed audio path. Audio and envelope switches change connections; modulation rows show whether their depth or sync controls are currently engaged.</p>
     </section>
 
     <div className="section-kicker"><span>05</span> PERFORMANCE <i /></div>
