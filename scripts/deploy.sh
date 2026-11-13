@@ -5,6 +5,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DATA_DIR="${SYNTH_DATA_DIR:-$ROOT_DIR/data}"
+# Support both the Docker Compose plugin and Synology's standalone v1 CLI.
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE=(docker-compose)
+else
+    echo "Docker Compose is required (docker compose or docker-compose)." >&2
+    exit 1
+fi
 BUILDER_IMAGE="web-play-synth-builder:deploy"
 NGINX_IMAGE="nginx:1.27-alpine"
 RELEASE_ID="$(git rev-parse --short=12 HEAD 2>/dev/null || date -u +%Y%m%d%H%M%S)-$(date -u +%Y%m%d%H%M%S)"
@@ -90,7 +99,7 @@ ln -s "$RELEASE_DIR" "$TEMP_CURRENT"
 mv -Tf "$TEMP_CURRENT" "$CURRENT_LINK"
 
 echo "Activating release $RELEASE_ID..."
-docker compose up -d --no-deps web-play-synth
+"${COMPOSE[@]}" up -d --no-deps web-play-synth
 
 echo "Deployment complete."
 echo "Current release: $RELEASE_DIR"
