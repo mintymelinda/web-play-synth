@@ -105,3 +105,40 @@
 @media(max-width:650px){.route-state{min-width:78px}}
 
 .select-control select:disabled{opacity:.45;cursor:not-allowed}
+
+
+/* Compact MIDI CC learning panel */
+.midi-panel{grid-template-columns:minmax(0,1fr) auto}
+.midi-panel-actions{display:flex;align-items:center;gap:8px}
+.midi-map-toggle{padding:10px 12px;border:1px solid #414b4e;border-radius:3px;background:#171d1f;color:#aab7b2;font:8px var(--mono);letter-spacing:.8px;cursor:pointer}
+.midi-map-toggle:hover,.midi-map-toggle[aria-expanded="true"]{border-color:#806ab0;color:#d0bdfb;background:#252033}
+.midi-map-toggle span{margin-left:5px;color:var(--cyan)}
+.cc-mapping-panel{grid-column:1/-1;padding:12px 13px;border:1px solid #343d40;border-radius:4px;background:#14191b}
+.cc-map-topline,.cc-map-assign{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cc-map-topline strong{font:9px var(--mono);letter-spacing:1px;color:#dce2dd}
+.cc-map-topline>span,.cc-map-hint{font:8px var(--mono);color:#748184}
+.cc-map-assign{justify-content:flex-start;margin-top:11px}
+.cc-map-assign label{display:flex;flex:1;align-items:center;gap:10px;min-width:0}
+.cc-map-assign label>span{flex:none;font:8px var(--mono);color:#849092}
+.cc-map-assign select{width:100%;min-width:0;padding:8px 9px;border:1px solid #3b4548;border-radius:3px;background:#1c2325;color:#e0e7e1;font:9px var(--mono)}
+.cc-map-assign button{flex:none;padding:9px 12px;border:1px solid #635b83;border-radius:3px;background:#211e2b;color:#c9b9f4;font:8px var(--mono);letter-spacing:.7px;cursor:pointer}
+.cc-map-assign button:disabled{opacity:.4;cursor:not-allowed}
+.cc-map-assign button.is-learning{border-color:var(--cyan);background:#1b302c;color:var(--cyan);animation:cc-pulse 1.1s ease-in-out infinite alternate}
+.cc-map-hint{margin:8px 0 0;line-height:1.5}
+.cc-map-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 14px;margin-top:10px;padding-top:9px;border-top:1px solid #2c3436}
+.cc-map-row{display:flex;align-items:center;gap:8px;min-width:0;color:#aeb9b3;font:8px var(--mono)}
+.cc-map-row span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cc-map-row b{color:var(--cyan);font-weight:400;white-space:nowrap}
+.cc-map-row button{width:19px;height:19px;border:0;border-radius:3px;background:#252c2e;color:#9ca7a5;font-size:14px;cursor:pointer}
+@keyframes cc-pulse{to{box-shadow:0 0 0 3px #65d9d122}}
+/* The knob uses pointer-axis detection rather than the native horizontal range gesture. */
+.knob input{touch-action:none;cursor:grab}
+.knob input:active{cursor:grabbing}
+@media(max-width:650px){
+ .midi-panel{grid-template-columns:1fr}
+ .midi-panel-actions{flex-wrap:wrap}
+ .cc-mapping-panel{grid-column:auto}
+ .cc-map-assign{align-items:stretch;flex-direction:column}
+ .cc-map-assign label{align-items:flex-start;flex-direction:column}
+ .cc-map-list{grid-template-columns:1fr}
+}

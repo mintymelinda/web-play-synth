@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { AudioLines, Cable, CircleHelp, Power, Volume2 } from "lucide-react";
 import { SynthEngine, type Envelope, type SynthSettings, type Waveform } from "./audio/SynthEngine";
 
@@ -37,15 +37,66 @@ type MidiNavigator = {
   requestMIDIAccess?: () => Promise<unknown>;
 };
 
+type MidiCcMapping = Record<string, number>;
+type CcControl = { id: string; label: string; min: number; max: number; step: number; logarithmic?: boolean };
+const ccControls: CcControl[] = [
+  { id: "oscillator1.octave", label: "VCO 1 · Octave", min: -2, max: 2, step: 1 },
+  { id: "oscillator1.tune", label: "VCO 1 · Tune", min: -12, max: 12, step: 1 },
+  { id: "oscillator1.level", label: "VCO 1 · Level", min: 0, max: 1, step: 0.01 },
+  { id: "oscillator2.octave", label: "VCO 2 · Octave", min: -2, max: 2, step: 1 },
+  { id: "oscillator2.tune", label: "VCO 2 · Tune", min: -12, max: 12, step: 1 },
+  { id: "oscillator2.level", label: "VCO 2 · Level", min: 0, max: 1, step: 0.01 },
+  { id: "oscillator2.crossMod", label: "VCO 2 · FM Amount", min: 0, max: 800, step: 5 },
+  { id: "filter.cutoff", label: "Filter · Cutoff", min: 30, max: 18000, step: 10, logarithmic: true },
+  { id: "filter.resonance", label: "Filter · Resonance", min: 0.1, max: 18, step: 0.1 },
+  { id: "filter.contour", label: "Filter · Contour", min: 0, max: 1, step: 0.01 },
+  { id: "filterEnvelope.attack", label: "Filter Env · Attack", min: 0.005, max: 4, step: 0.005, logarithmic: true },
+  { id: "filterEnvelope.decay", label: "Filter Env · Decay", min: 0.005, max: 5, step: 0.005, logarithmic: true },
+  { id: "filterEnvelope.sustain", label: "Filter Env · Sustain", min: 0, max: 1, step: 0.01 },
+  { id: "filterEnvelope.release", label: "Filter Env · Release", min: 0.005, max: 6, step: 0.005, logarithmic: true },
+  { id: "ampEnvelope.attack", label: "Amp Env · Attack", min: 0.005, max: 4, step: 0.005, logarithmic: true },
+  { id: "ampEnvelope.decay", label: "Amp Env · Decay", min: 0.005, max: 5, step: 0.005, logarithmic: true },
+  { id: "ampEnvelope.sustain", label: "Amp Env · Sustain", min: 0, max: 1, step: 0.01 },
+  { id: "ampEnvelope.release", label: "Amp Env · Release", min: 0.005, max: 6, step: 0.005, logarithmic: true },
+  { id: "lfo.rate", label: "LFO · Rate", min: 0.1, max: 20, step: 0.1 },
+  { id: "lfo.pitchDepth", label: "LFO · Pitch Depth", min: 0, max: 25, step: 0.1 },
+  { id: "lfo.filterDepth", label: "LFO · Filter Depth", min: 0, max: 5000, step: 10 },
+];
+
 type ParamProps = { label: string; value: number; min: number; max: number; step?: number; display?: (v: number) => string; onChange: (v: number) => void; logarithmic?: boolean };
 
-function Knob({ label, value, min, max, step = 0.01, display, onChange, logarithmic = false }: ParamProps) {
+function Knob({ label, value, min, max, step = 0.01, display, onChange }: ParamProps) {
   const angle = -135 + ((value - min) / (max - min)) * 270;
+  const drag = useRef<{ pointerId: number; x: number; y: number; value: number; axis: "x" | "y" | null } | null>(null);
+  const beginDrag = (event: ReactPointerEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, value, axis: null };
+  };
+  const moveDrag = (event: ReactPointerEvent<HTMLInputElement>) => {
+    const active = drag.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    const dx = event.clientX - active.x;
+    const dy = active.y - event.clientY;
+    if (!active.axis && Math.max(Math.abs(dx), Math.abs(dy)) >= 3) {
+      active.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+    if (!active.axis) return;
+    const distance = active.axis === "y" ? dy : dx;
+    const next = Math.min(max, Math.max(min, active.value + (distance / 140) * (max - min)));
+    const quantized = min + Math.round((next - min) / step) * step;
+    onChange(Math.min(max, Math.max(min, quantized)));
+  };
+  const endDrag = (event: ReactPointerEvent<HTMLInputElement>) => {
+    if (drag.current?.pointerId === event.pointerId) drag.current = null;
+  };
   return <label className="knob-control">
     <span className="knob-label">{label}</span>
     <span className="knob" style={{ "--angle": `${angle}deg` } as CSSProperties}>
       <input aria-label={label} type="range" min={min} max={max} step={step} value={value}
-        onChange={(event) => onChange(logarithmic ? Number(event.target.value) : Number(event.target.value))} />
+        onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+        onChange={(event) => onChange(Number(event.target.value))} />
       <span className="knob-face"><span className="knob-indicator" /></span>
     </span>
     <output>{display ? display(value) : value.toFixed(2)}</output>
@@ -80,6 +131,14 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [midiDevices, setMidiDevices] = useState<string[]>([]);
   const [midiConnected, setMidiConnected] = useState(false);
+  const [ccMappings, setCcMappings] = useState<MidiCcMapping>(() => {
+    try { return JSON.parse(localStorage.getItem("web-play-synth-midi-cc") || "{}") as MidiCcMapping; }
+    catch { return {}; }
+  });
+  const [showCcMapping, setShowCcMapping] = useState(false);
+  const [ccTarget, setCcTarget] = useState(ccControls[0].id);
+  const [learningCc, setLearningCc] = useState(false);
+  const midiCcHandler = useRef<(cc: number, value: number) => void>(() => undefined);
   const sourceNotes = useRef(new Map<string, { note: number; displayNote: number }>());
   const midiAccess = useRef<MidiAccessLike | null>(null);
 
@@ -87,6 +146,52 @@ export default function App() {
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
   }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem("web-play-synth-midi-cc", JSON.stringify(ccMappings)); } catch { /* Storage may be unavailable in private browsing. */ }
+  }, [ccMappings]);
+
+  midiCcHandler.current = (cc, midiValue) => {
+    if (learningCc) {
+      setCcMappings((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([key, assigned]) => key === ccTarget || assigned !== cc)), [ccTarget]: cc }));
+      setLearningCc(false);
+      return;
+    }
+    const target = ccControls.find((control) => ccMappings[control.id] === cc);
+    if (!target) return;
+    const normalized = midiValue / 127;
+    const raw = target.logarithmic
+      ? target.min * Math.pow(target.max / target.min, normalized)
+      : target.min + normalized * (target.max - target.min);
+    const next = Math.min(target.max, Math.max(target.min,
+      target.min + Math.round((raw - target.min) / target.step) * target.step));
+    setSettings((current) => {
+      switch (target.id) {
+        case "oscillator1.octave": return { ...current, oscillator1: { ...current.oscillator1, octave: next } };
+        case "oscillator1.tune": return { ...current, oscillator1: { ...current.oscillator1, tune: next } };
+        case "oscillator1.level": return { ...current, oscillator1: { ...current.oscillator1, level: next } };
+        case "oscillator2.octave": return { ...current, oscillator2: { ...current.oscillator2, octave: next } };
+        case "oscillator2.tune": return { ...current, oscillator2: { ...current.oscillator2, tune: next } };
+        case "oscillator2.level": return { ...current, oscillator2: { ...current.oscillator2, level: next } };
+        case "oscillator2.crossMod": return { ...current, oscillator2: { ...current.oscillator2, crossMod: next } };
+        case "filter.cutoff": return { ...current, filter: { ...current.filter, cutoff: next } };
+        case "filter.resonance": return { ...current, filter: { ...current.filter, resonance: next } };
+        case "filter.contour": return { ...current, filter: { ...current.filter, contour: next } };
+        case "filterEnvelope.attack": return { ...current, filterEnvelope: { ...current.filterEnvelope, attack: next } };
+        case "filterEnvelope.decay": return { ...current, filterEnvelope: { ...current.filterEnvelope, decay: next } };
+        case "filterEnvelope.sustain": return { ...current, filterEnvelope: { ...current.filterEnvelope, sustain: next } };
+        case "filterEnvelope.release": return { ...current, filterEnvelope: { ...current.filterEnvelope, release: next } };
+        case "ampEnvelope.attack": return { ...current, ampEnvelope: { ...current.ampEnvelope, attack: next } };
+        case "ampEnvelope.decay": return { ...current, ampEnvelope: { ...current.ampEnvelope, decay: next } };
+        case "ampEnvelope.sustain": return { ...current, ampEnvelope: { ...current.ampEnvelope, sustain: next } };
+        case "ampEnvelope.release": return { ...current, ampEnvelope: { ...current.ampEnvelope, release: next } };
+        case "lfo.rate": return { ...current, lfo: { ...current.lfo, rate: next } };
+        case "lfo.pitchDepth": return { ...current, lfo: { ...current.lfo, pitchDepth: next } };
+        case "lfo.filterDepth": return { ...current, lfo: { ...current.lfo, filterDepth: next } };
+        default: return current;
+      }
+    });
+  };
   const playSource = useCallback(async (source: string, note: number, velocity = 0.82, displayNote = note) => {
     if (sourceNotes.current.has(source)) return;
     sourceNotes.current.set(source, { note, displayNote });
@@ -165,6 +270,7 @@ export default function App() {
             const data2 = data[2];
             if (status === undefined || data1 === undefined) return;
             const command = status & 0xf0;
+            if (command === 0xb0) { midiCcHandler.current(data1, data2 ?? 0); return; }
             const channel = status & 0x0f;
             const source = `midi:${input.id}:${channel}:${data1}`;
             if (command === 0x90 && (data2 ?? 0) > 0) {
@@ -199,6 +305,7 @@ export default function App() {
           const data2 = data[2];
           if (status === undefined || data1 === undefined) return;
           const command = status & 0xf0;
+          if (command === 0xb0) { midiCcHandler.current(data1, data2 ?? 0); return; }
           const channel = status & 0x0f;
           const source = `midi:${input.id}:${channel}:${data1}`;
           if (command === 0x90 && (data2 ?? 0) > 0) {
@@ -393,8 +500,22 @@ export default function App() {
       <div className="keyboard-heading"><div><span className="eyebrow">PLAYABLE INPUT</span><h2>KEYBOARD</h2></div><div className="octave-control"><button onClick={() => setOctave(Math.max(-2, octave - 1))}>−</button><span>OCTAVE <b>{octave > 0 ? "+" : ""}{octave}</b></span><button onClick={() => setOctave(Math.min(2, octave + 1))}>+</button></div></div>
       <div className="midi-panel">
         <div><span className="eyebrow">HARDWARE INPUT</span><strong>MIDI KEYBOARD</strong><small>{midiConnected ? `${midiDevices.length} INPUT(S) DETECTED` : "CONNECT A USB OR BLUETOOTH MIDI CONTROLLER"}</small></div>
-        <button className="midi-button" onClick={midiConnected ? disconnectMidi : connectMidi}>{midiConnected ? "DISCONNECT MIDI" : "CONNECT MIDI"}</button>
+        <div className="midi-panel-actions">
+          <button className="midi-button" onClick={midiConnected ? disconnectMidi : connectMidi}>{midiConnected ? "DISCONNECT MIDI" : "CONNECT MIDI"}</button>
+          <button className="midi-map-toggle" aria-expanded={showCcMapping} onClick={() => setShowCcMapping((shown) => !shown)}>CC MAP <span>{Object.keys(ccMappings).length}</span></button>
+        </div>
         {midiConnected && <span className="midi-device-list">{midiDevices.length ? midiDevices.join(" · ") : "Waiting for MIDI input…"}</span>}
+        {showCcMapping && <div className="cc-mapping-panel">
+          <div className="cc-map-topline"><strong>MIDI CONTROL MAP</strong><span>{Object.keys(ccMappings).length} ASSIGNED</span></div>
+          <div className="cc-map-assign">
+            <label><span>PARAMETER</span><select value={ccTarget} onChange={(event) => { setCcTarget(event.target.value); setLearningCc(false); }}>{ccControls.map((control) => <option key={control.id} value={control.id}>{control.label}</option>)}</select></label>
+            <button className={learningCc ? "is-learning" : ""} disabled={!midiConnected} onClick={() => setLearningCc(true)}>{learningCc ? "MOVE A CONTROL…" : "LEARN CC"}</button>
+          </div>
+          <p className="cc-map-hint">{!midiConnected ? "Connect a MIDI controller to assign controls." : learningCc ? "Move a knob or fader on your MIDI controller." : "Select a parameter, then learn its CC. Assignments are saved in this browser."}</p>
+          {Object.keys(ccMappings).length > 0 && <div className="cc-map-list">{ccControls.filter((control) => ccMappings[control.id] !== undefined).map((control) => <div className="cc-map-row" key={control.id}>
+            <span>{control.label}</span><b>CC {ccMappings[control.id]}</b><button aria-label={`Remove ${control.label} mapping`} onClick={() => setCcMappings((current) => { const next = { ...current }; delete next[control.id]; return next; })}>×</button>
+          </div>)}</div>}
+        </div>}
         {!((navigator as MidiNavigator).requestMIDIAccess) && <span className="midi-unsupported">Web MIDI is unavailable in this browser. Try a Chromium-based browser over HTTPS or localhost.</span>}
       </div>
       <div className="piano">{notes.filter((n) => !n.black).map((note) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span><small>{note.key}</small></button>{notes.find((n) => n.note === note.note + 1)?.black && <button className={`black-key ${held.includes(note.note + 1) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note + 1); }} onPointerUp={() => release(note.note + 1)} onPointerLeave={() => held.includes(note.note + 1) && release(note.note + 1)}><span>{notes.find((n) => n.note === note.note + 1)!.key}</span></button>}</div>)}</div>
