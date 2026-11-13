@@ -73,3 +73,11 @@
 .routing-footnote{line-height:1.6}
 @media(max-width:900px){.route-groups{grid-template-columns:1fr}.signal-flow{gap:7px}.signal-stage{min-width:82px;padding:9px}.signal-stage strong{font-size:9px}}
 @media(max-width:650px){.signal-flow{justify-content:flex-start}.signal-stage{flex:0 0 100px}.route-row{grid-template-columns:minmax(85px,1fr) 28px minmax(90px,1fr) auto;gap:5px}.route-source,.route-destination{font-size:8px}.route-switch{min-width:78px;padding:7px 5px;font-size:7px}.route-list{padding:4px 7px}.route-group-heading{padding:11px}}
+
+
+/* Modulation status is read-only here; edit depth in its source module. */
+.route-group-modulation{grid-column:1/-1}
+.route-state{justify-self:end;min-width:112px;padding:7px 8px;border:1px solid #3b4447;border-radius:4px;background:#1a1f21;color:#879294;text-align:center;font:8px var(--mono);letter-spacing:.35px;white-space:nowrap}
+.route-state.is-active{border-color:#7866a7;background:#272238;color:#c5b4f5}
+@media(max-width:900px){.route-group-modulation{grid-column:auto}}
+@media(max-width:650px){.route-state{min-width:78px;padding:6px 4px;font-size:7px}.route-group-modulation{grid-column:auto}}
