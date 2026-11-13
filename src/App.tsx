@@ -232,7 +232,15 @@ export default function App() {
     setMidiConnected(false);
   };
 
-  useEffect(() => () => {\n    for (const source of [...sourceNotes.current.keys()]) releaseSource(source);\n    engine.current.allNotesOff();\n    disconnectMidi();\n  }, [releaseSource]);
+  useEffect(() => () => {
+    sourceNotes.current.clear();
+    engine.current.allNotesOff();
+    const access = midiAccess.current;
+    if (access) {
+      access.onstatechange = null;
+      for (const input of access.inputs.values()) input.onmidimessage = null;
+    }
+  }, []);
   const activeCount = held.length;
   const frequencyLabel = useMemo(() => `${Math.round(settings.filter.cutoff).toLocaleString()} Hz`, [settings.filter.cutoff]);
 
