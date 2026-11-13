@@ -88,7 +88,6 @@ export class SynthEngine {
       oscillator.frequency.value = 440 * 2 ** ((note - 69 + config.octave * 12 + config.tune) / 12);
       gain.gain.value = config.level;
       oscillator.connect(gain);
-      gain.connect(voiceGain);
       oscillator.start(now);
       oscillators.push(oscillator);
       oscillatorGains.push(gain);
