@@ -18,16 +18,31 @@
 .patch-status span{color:#657173;margin-left:8px}
 @media(max-width:650px){.patch-status span{display:block;margin:5px 0 0}}
 
-/* LFO and oscillator interaction controls */
+/* Clear oscillator and LFO modulation controls */
 .modulation-module{margin-bottom:8px}
+.modulation-intro{max-width:760px;margin:-7px 0 14px;color:#899596;font:10px/1.65 var(--mono)}
 .modulation-controls{display:grid;grid-template-columns:minmax(190px,.7fr) 2fr;gap:24px;align-items:center}
 .modulation-controls>.knob-row{padding:8px 0}
-.oscillator-modulation{display:flex;align-items:center;gap:24px;padding-top:15px;border-top:1px solid var(--line)}
-.sync-toggle{display:flex;align-items:center;gap:9px;color:#dce2dd;font:9px var(--mono);letter-spacing:1px;cursor:pointer}
-.sync-toggle input{position:absolute;opacity:0}
-.sync-toggle small{color:var(--muted);font-size:7px}
-.oscillator-modulation p{max-width:430px;margin:0 0 0 auto;color:#758082;font:9px/1.6 var(--mono)}
-@media(max-width:650px){.modulation-controls{grid-template-columns:1fr;gap:2px}.oscillator-modulation{align-items:flex-start;flex-wrap:wrap;gap:14px}.oscillator-modulation p{flex-basis:100%;margin:0}}
+.lfo-destination-hints{display:flex;flex-wrap:wrap;gap:9px 28px;padding-top:13px;border-top:1px solid var(--line);color:#899596;font:8px/1.5 var(--mono)}
+.lfo-destination-hints b{margin-right:5px;color:var(--violet);letter-spacing:.7px}
+.vco2-mod-controls{margin-top:16px;padding-top:13px;border-top:1px solid var(--line)}
+.vco2-mod-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;color:#dce2dd;font:8px var(--mono);letter-spacing:.9px}
+.vco2-mod-heading small{color:#748184;font-size:7px;letter-spacing:0;text-align:right}
+.sync-button{display:flex;width:100%;align-items:center;gap:11px;padding:10px 12px;border:1px solid #414b4e;border-radius:5px;background:#151a1c;color:#cbd3ce;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+.sync-button:hover{border-color:#8974b5}
+.sync-button:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+.sync-button.is-active{border-color:#806ab0;background:#282238}
+.sync-indicator{width:9px;height:9px;flex:none;border:1px solid #8c9695;border-radius:50%;background:transparent}
+.sync-button.is-active .sync-indicator{border-color:var(--violet);background:var(--violet);box-shadow:0 0 9px var(--violet)}
+.sync-button>span:nth-child(2){display:flex;flex:1;flex-direction:column;gap:4px}
+.sync-button strong{font:9px var(--mono);letter-spacing:.8px}
+.sync-button small{color:#83908f;font:8px var(--mono)}
+.sync-button>b{color:#879392;font:9px var(--mono)}
+.sync-button.is-active>b{color:#d0bdfb}
+.vco2-fm-control{display:flex;align-items:center;gap:15px;padding-top:8px}
+.vco2-fm-control .knob-row{padding:12px 0 5px}
+.vco2-fm-control p{max-width:205px;color:#758082;font:8px/1.6 var(--mono)}
+@media(max-width:650px){.modulation-controls{grid-template-columns:1fr;gap:2px}.vco2-mod-heading{align-items:flex-start;flex-direction:column}.vco2-mod-heading small{text-align:left}.vco2-fm-control{align-items:flex-start;gap:8px}.vco2-fm-control p{padding-top:14px}.lfo-destination-hints{flex-direction:column;gap:7px}}
 
 /* Hardware MIDI input */
 .midi-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 18px;margin:0 0 18px;padding:14px 16px;border:1px solid var(--line);background:#111719}
@@ -81,3 +96,12 @@
 .route-state.is-active{border-color:#7866a7;background:#272238;color:#c5b4f5}
 @media(max-width:900px){.route-group-modulation{grid-column:auto}}
 @media(max-width:650px){.route-state{min-width:78px;padding:6px 4px;font-size:7px}.route-group-modulation{grid-column:auto}}
+
+
+/* Keep modulation status readable and explicitly non-interactive. */
+.route-group-modulation{grid-column:1/-1}
+.route-group-modulation .route-group-heading small{line-height:1.5}
+.route-state{min-width:112px}
+@media(max-width:650px){.route-state{min-width:78px}}
+
+.select-control select:disabled{opacity:.45;cursor:not-allowed}
