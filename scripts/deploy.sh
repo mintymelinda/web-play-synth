@@ -48,7 +48,7 @@ fi
 # publishing anything. Vite emits content-hashed paths under /assets/.
 while IFS= read -r asset; do
     [[ -z "$asset" ]] && continue
-    if [[ ! -s "$STAGE_DIR${asset#/}" ]]; then
+    if [[ ! -s "${STAGE_DIR}/${asset#/}" ]]; then
         echo "Build references a missing asset: $asset" >&2
         exit 1
     fi
