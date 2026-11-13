@@ -148,12 +148,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("web-play-synth-midi-cc", JSON.stringify(ccMappings));
+    try { localStorage.setItem("web-play-synth-midi-cc", JSON.stringify(ccMappings)); } catch { /* Storage may be unavailable in private browsing. */ }
   }, [ccMappings]);
 
   midiCcHandler.current = (cc, midiValue) => {
     if (learningCc) {
-      setCcMappings((current) => ({ ...current, [ccTarget]: cc }));
+      setCcMappings((current) => ({ ...Object.fromEntries(Object.entries(current).filter(([key, assigned]) => key === ccTarget || assigned !== cc)), [ccTarget]: cc }));
       setLearningCc(false);
       return;
     }
