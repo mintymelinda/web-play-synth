@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AudioLines, Cable, CircleHelp, Power, Volume2 } from "lucide-react";
 import { SynthEngine, type Envelope, type SynthSettings, type Waveform } from "./audio/SynthEngine";
 
@@ -27,7 +27,7 @@ function Knob({ label, value, min, max, step = 0.01, display, onChange, logarith
   const angle = -135 + ((value - min) / (max - min)) * 270;
   return <label className="knob-control">
     <span className="knob-label">{label}</span>
-    <span className="knob" style={{ "--angle": `${angle}deg` } as React.CSSProperties}>
+    <span className="knob" style={{ "--angle": `${angle}deg` } as CSSProperties}>
       <input aria-label={label} type="range" min={min} max={max} step={step} value={value}
         onChange={(event) => onChange(logarithmic ? Number(event.target.value) : Number(event.target.value))} />
       <span className="knob-face"><span className="knob-indicator" /></span>
@@ -59,12 +59,12 @@ export default function App() {
   const [settings, setSettings] = useState(initial);
   const [powered, setPowered] = useState(false);
   const [held, setHeld] = useState<number[]>([]);
-  const [routing, setRouting] = useState({ vco1: true, vco2: true, filterEnv: true, ampEnv: true });
+  const routing = settings.routing;
   const [octave, setOctave] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => { engine.current.update(settings); }, [settings]);
-  const update = useCallback(<K extends keyof SynthSettings>(key: K, value: SynthSettings[K]) => {
+  const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
   }, []);
   const play = useCallback(async (note: number) => {
@@ -158,10 +158,10 @@ export default function App() {
         <div className="patch-column destinations"><span className="patch-label">DESTINATIONS</span><div className="patch-node amber-node"><span className="port" /> MIXER <small>AUDIO IN</small></div><div className="patch-node amber-node"><span className="port" /> VCF <small>CUTOFF CV</small></div><div className="patch-node amber-node"><span className="port" /> VCA <small>GAIN CV</small></div></div>
       </div>
       <div className="route-toggles">
-        <label><input type="checkbox" checked={routing.vco1} onChange={(e) => setRouting({ ...routing, vco1: e.target.checked })} /><span className="toggle-dot cyan" /> VCO 1 → MIXER</label>
-        <label><input type="checkbox" checked={routing.vco2} onChange={(e) => setRouting({ ...routing, vco2: e.target.checked })} /><span className="toggle-dot violet" /> VCO 2 → MIXER</label>
-        <label><input type="checkbox" checked={routing.filterEnv} onChange={(e) => setRouting({ ...routing, filterEnv: e.target.checked })} /><span className="toggle-dot violet" /> FILTER ENV → CUTOFF</label>
-        <label><input type="checkbox" checked={routing.ampEnv} onChange={(e) => setRouting({ ...routing, ampEnv: e.target.checked })} /><span className="toggle-dot cyan" /> AMP ENV → VCA</label>
+        <label><input type="checkbox" checked={routing.vco1} onChange={(e) => update("routing", { ...routing, vco1: e.target.checked })} /><span className="toggle-dot cyan" /> VCO 1 → MIXER</label>
+        <label><input type="checkbox" checked={routing.vco2} onChange={(e) => update("routing", { ...routing, vco2: e.target.checked })} /><span className="toggle-dot violet" /> VCO 2 → MIXER</label>
+        <label><input type="checkbox" checked={routing.filterEnv} onChange={(e) => update("routing", { ...routing, filterEnv: e.target.checked })} /><span className="toggle-dot violet" /> FILTER ENV → CUTOFF</label>
+        <label><input type="checkbox" checked={routing.ampEnv} onChange={(e) => update("routing", { ...routing, ampEnv: e.target.checked })} /><span className="toggle-dot cyan" /> AMP ENV → VCA</label>
       </div>
       <p className="routing-footnote">Toggle a connection to patch or unpatch the route. The matrix is the visual representation of the current signal architecture.</p>
     </section>
@@ -169,7 +169,7 @@ export default function App() {
     <div className="section-kicker"><span>04</span> PERFORMANCE <i /></div>
     <section className="module keyboard-module">
       <div className="keyboard-heading"><div><span className="eyebrow">PLAYABLE INPUT</span><h2>KEYBOARD</h2></div><div className="octave-control"><button onClick={() => setOctave(Math.max(-2, octave - 1))}>−</button><span>OCTAVE <b>{octave > 0 ? "+" : ""}{octave}</b></span><button onClick={() => setOctave(Math.min(2, octave + 1))}>+</button></div></div>
-      <div className="piano">{notes.filter((n) => !n.black).map((note, index) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span><small>{note.key}</small></button>{notes[index + 1]?.black && <button className={`black-key ${held.includes(notes[index + 1].note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(notes[index + 1].note); }} onPointerUp={() => release(notes[index + 1].note)} onPointerLeave={() => held.includes(notes[index + 1].note) && release(notes[index + 1].note)}><span>{notes[index + 1].key}</span></button>}</div>)}</div>
+      <div className="piano">{notes.filter((n) => !n.black).map((note) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span><small>{note.key}</small></button>{notes.find((n) => n.note === note.note + 1)?.black && <button className={`black-key ${held.includes(note.note + 1) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note + 1); }} onPointerUp={() => release(note.note + 1)} onPointerLeave={() => held.includes(note.note + 1) && release(note.note + 1)}><span>{notes.find((n) => n.note === note.note + 1)!.key}</span></button>}</div>)}</div>
       <div className="keyboard-footer"><span>COMPUTER KEYBOARD ENABLED</span><span><Volume2 size={14} /> {powered ? "AUDIO ACTIVE" : "PRESS POWER TO ENABLE AUDIO"}</span></div>
     </section>
     <footer><span>WEB PLAY SYNTH <b>001</b></span><span>LOCAL AUDIO ENGINE · NO SERVER-SIDE AUDIO</span><span>BUILT FOR EXPERIMENTATION <AudioLines size={13} /></span></footer>
