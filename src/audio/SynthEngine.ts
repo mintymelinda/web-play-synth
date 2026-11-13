@@ -14,6 +14,7 @@ export interface SynthSettings {
   filterEnvelope: Envelope;
   ampEnvelope: Envelope;
   master: number;
+  routing: { vco1: boolean; vco2: boolean; filterEnv: boolean; ampEnv: boolean };
 }
 
 interface Voice {
@@ -24,6 +25,7 @@ interface Voice {
   voiceGain: GainNode;
   note: number;
   released: boolean;
+  connected: [boolean, boolean];
 }
 
 const DEFAULT_SETTINGS: SynthSettings = {
@@ -33,6 +35,7 @@ const DEFAULT_SETTINGS: SynthSettings = {
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
+  routing: { vco1: true, vco2: true, filterEnv: true, ampEnv: true },
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -103,18 +106,24 @@ export class SynthEngine {
     const ampEnv = this.settings.ampEnvelope;
     const filterEnv = this.settings.filterEnvelope;
     amp.gain.cancelScheduledValues(now);
-    amp.gain.setValueAtTime(0, now);
-    amp.gain.linearRampToValueAtTime(velocity, now + ampEnv.attack);
-    amp.gain.linearRampToValueAtTime(velocity * ampEnv.sustain, now + ampEnv.attack + ampEnv.decay);
+    if (this.settings.routing.ampEnv) {
+      amp.gain.setValueAtTime(0, now);
+      amp.gain.linearRampToValueAtTime(velocity, now + ampEnv.attack);
+      amp.gain.linearRampToValueAtTime(velocity * ampEnv.sustain, now + ampEnv.attack + ampEnv.decay);
+    } else {
+      amp.gain.setValueAtTime(velocity, now);
+    }
 
-    const peak = this.settings.filter.cutoff * 2 ** (this.settings.filter.contour * 3);
     filter.frequency.cancelScheduledValues(now);
     filter.frequency.setValueAtTime(clamp(this.settings.filter.cutoff, 30, 18000), now);
-    filter.frequency.exponentialRampToValueAtTime(clamp(peak, 31, 19000), now + Math.max(0.005, filterEnv.attack));
-    filter.frequency.exponentialRampToValueAtTime(
-      clamp(this.settings.filter.cutoff * 2 ** (this.settings.filter.contour * (filterEnv.sustain * 3)), 31, 19000),
-      now + filterEnv.attack + filterEnv.decay,
-    );
+    if (this.settings.routing.filterEnv) {
+      const peak = this.settings.filter.cutoff * 2 ** (this.settings.filter.contour * 3);
+      filter.frequency.exponentialRampToValueAtTime(clamp(peak, 31, 19000), now + Math.max(0.005, filterEnv.attack));
+      filter.frequency.exponentialRampToValueAtTime(
+        clamp(this.settings.filter.cutoff * 2 ** (this.settings.filter.contour * (filterEnv.sustain * 3)), 31, 19000),
+        now + filterEnv.attack + filterEnv.decay,
+      );
+    }
   }
 
   noteOff(note: number) {
@@ -126,7 +135,7 @@ export class SynthEngine {
     const filter = this.settings.filterEnvelope;
     voice.amp.gain.cancelScheduledValues(now);
     voice.amp.gain.setValueAtTime(voice.amp.gain.value, now);
-    voice.amp.gain.linearRampToValueAtTime(0, now + amp.release);
+    voice.amp.gain.linearRampToValueAtTime(0, now + (this.settings.routing.ampEnv ? amp.release : 0.02));
     voice.filter.frequency.cancelScheduledValues(now);
     voice.filter.frequency.setTargetAtTime(
       clamp(this.settings.filter.cutoff, 31, 19000),
@@ -152,6 +161,14 @@ export class SynthEngine {
     const configs = [this.settings.oscillator1, this.settings.oscillator2];
     configs.forEach((config, index) => {
       const oscillator = voice.oscillators[index];
+      const routeEnabled = index === 0 ? this.settings.routing.vco1 : this.settings.routing.vco2;
+      if (routeEnabled && !voice.connected[index]) {
+        voice.oscillatorGains[index].connect(voice.voiceGain);
+        voice.connected[index] = true;
+      } else if (!routeEnabled && voice.connected[index]) {
+        voice.oscillatorGains[index].disconnect(voice.voiceGain);
+        voice.connected[index] = false;
+      }
       oscillator.type = config.waveform;
       oscillator.frequency.setTargetAtTime(
         440 * 2 ** ((voice.note - 69 + config.octave * 12 + config.tune) / 12),
@@ -161,6 +178,6 @@ export class SynthEngine {
       voice.oscillatorGains[index].gain.setTargetAtTime(config.level, this.context!.currentTime, 0.015);
     });
     voice.filter.Q.setTargetAtTime(this.settings.filter.resonance, this.context.currentTime, 0.015);
-    voice.filter.frequency.setTargetAtTime(this.settings.filter.cutoff, this.context.currentTime, 0.015);
+    if (!this.settings.routing.filterEnv) voice.filter.frequency.setTargetAtTime(this.settings.filter.cutoff, this.context.currentTime, 0.015);
   }
 }
