@@ -27,14 +27,14 @@ type MidiInputPort = {
   id: string;
   name?: string | null;
   state?: string;
-  onmidimessage: ((event: { data: Uint8Array }) => void) | null;
+  onmidimessage: ((event: { data: Uint8Array | null }) => void) | null;
 };
 type MidiAccessLike = {
-  inputs: Map<string, MidiInputPort>;
+  inputs: { values(): IterableIterator<MidiInputPort> };
   onstatechange: (() => void) | null;
 };
-type MidiNavigator = Navigator & {
-  requestMIDIAccess?: () => Promise<MidiAccessLike>;
+type MidiNavigator = {
+  requestMIDIAccess?: () => Promise<unknown>;
 };
 
 type ParamProps = { label: string; value: number; min: number; max: number; step?: number; display?: (v: number) => string; onChange: (v: number) => void; logarithmic?: boolean };
@@ -169,7 +169,11 @@ export default function App() {
           }
         } else {
           input.onmidimessage = (event) => {
-            const [status, data1, data2] = event.data;
+            const data = event.data;
+            if (!data) return;
+            const status = data[0];
+            const data1 = data[1];
+            const data2 = data[2];
             if (status === undefined || data1 === undefined) return;
             const command = status & 0xf0;
             const channel = status & 0x0f;
@@ -195,11 +199,15 @@ export default function App() {
     const midiNavigator = navigator as MidiNavigator;
     if (!midiNavigator.requestMIDIAccess) return;
     try {
-      const access = await midiNavigator.requestMIDIAccess();
+      const access = await midiNavigator.requestMIDIAccess() as MidiAccessLike;
       midiAccess.current = access;
       for (const input of access.inputs.values()) {
         input.onmidimessage = (event) => {
-          const [status, data1, data2] = event.data;
+          const data = event.data;
+          if (!data) return;
+          const status = data[0];
+          const data1 = data[1];
+          const data2 = data[2];
           if (status === undefined || data1 === undefined) return;
           const command = status & 0xf0;
           const channel = status & 0x0f;
