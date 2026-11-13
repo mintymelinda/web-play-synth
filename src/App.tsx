@@ -78,21 +78,10 @@ export default function App() {
   const routing = settings.routing;
   const [octave, setOctave] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
-  const [dragSource, setDragSource] = useState<string | null>(null);
-  const [patchMessage, setPatchMessage] = useState("Drag a source jack onto a destination to make a connection.");
   const [midiDevices, setMidiDevices] = useState<string[]>([]);
   const [midiConnected, setMidiConnected] = useState(false);
   const sourceNotes = useRef(new Map<string, { note: number; displayNote: number }>());
   const midiAccess = useRef<MidiAccessLike | null>(null);
-
-  const connectPatch = (destination: string, source: string | null = dragSource) => {
-    if (!source) return;
-    const routes: Record<string, keyof SynthSettings["routing"]> = { "vco1:mixer": "vco1", "vco2:mixer": "vco2", "filterEnv:vcf": "filterEnv", "ampEnv:vca": "ampEnv" };
-    const route = routes[`${source}:${destination}`];
-    if (route) { update("routing", { ...settings.routing, [route]: true }); setPatchMessage(`${source.toUpperCase()} connected to ${destination.toUpperCase()}.`); }
-    else setPatchMessage("That connection is not supported by this patchbay yet.");
-    setDragSource(null);
-  };
 
   useEffect(() => { engine.current.update(settings); }, [settings]);
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
