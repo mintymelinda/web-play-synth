@@ -52,8 +52,8 @@ function Knob({ label, value, min, max, step = 0.01, display, onChange, logarith
   </label>;
 }
 
-function Select({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
-  return <label className="select-control"><span>{label}</span><select value={value} onChange={(e) => onChange(e.target.value)}>{options.map((option) => <option key={option} value={option}>{option.toUpperCase()}</option>)}</select></label>;
+function Select({ label, value, options, onChange, disabled = false }: { label: string; value: string; options: string[]; onChange: (v: string) => void; disabled?: boolean }) {
+  return <label className="select-control"><span>{label}</span><select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>{options.map((option) => <option key={option} value={option}>{option.toUpperCase()}</option>)}</select></label>;
 }
 
 function EnvelopePanel({ title, value, onChange, accent }: { title: string; value: Envelope; onChange: (v: Envelope) => void; accent: string }) {
@@ -274,14 +274,14 @@ export default function App() {
 
       <div className="module oscillator-module">
         <div className="module-heading"><span className="module-led violet" /><div><span className="eyebrow">VOLTAGE CONTROLLED OSCILLATOR</span><h2>VCO 02</h2></div><span className="module-index">OSC / 02</span></div>
-        <Select label="WAVEFORM" value={settings.oscillator2.waveform} options={["sawtooth", "square", "triangle", "sine"]} onChange={(v) => update("oscillator2", { ...settings.oscillator2, waveform: v as Waveform })} />
+        <Select label="WAVEFORM" value={settings.oscillator2.waveform} options={["sawtooth", "square", "triangle", "sine"]} disabled={settings.oscillator2.hardSync} onChange={(v) => update("oscillator2", { ...settings.oscillator2, waveform: v as Waveform })} />
         <div className="knob-row"><Knob label="OCTAVE" value={settings.oscillator2.octave} min={-2} max={2} step={1} display={(n) => `${n > 0 ? "+" : ""}${n}`} onChange={(n) => update("oscillator2", { ...settings.oscillator2, octave: n })} /><Knob label="TUNE" value={settings.oscillator2.tune} min={-12} max={12} display={(n) => `${n > 0 ? "+" : ""}${n} st`} onChange={(n) => update("oscillator2", { ...settings.oscillator2, tune: n })} /><Knob label="LEVEL" value={settings.oscillator2.level} min={0} max={1} display={(n) => `${Math.round(n * 100)}%`} onChange={(n) => update("oscillator2", { ...settings.oscillator2, level: n })} /></div>
-        <div className="wave-preview violet-wave"><svg viewBox="0 0 240 35" preserveAspectRatio="none"><path d={settings.oscillator2.waveform === "sawtooth" ? "M0 30 L60 5 L60 30 L120 5 L120 30 L180 5 L180 30 L240 5" : settings.oscillator2.waveform === "square" ? "M0 27 L0 8 L60 8 L60 27 L120 27 L120 8 L180 8 L180 27 L240 27" : settings.oscillator2.waveform === "triangle" ? "M0 27 L30 5 L60 27 L90 5 L120 27 L150 5 L180 27 L210 5 L240 27" : "M0 17 C15 -2 45 -2 60 17 S105 36 120 17 S165 -2 180 17 S225 36 240 17"} /></svg><span>WAVEFORM MONITOR</span></div>
+        <div className="wave-preview violet-wave"><svg viewBox="0 0 240 35" preserveAspectRatio="none"><path d={settings.oscillator2.waveform === "sawtooth" ? "M0 30 L60 5 L60 30 L120 5 L120 30 L180 5 L180 30 L240 5" : settings.oscillator2.waveform === "square" ? "M0 27 L0 8 L60 8 L60 27 L120 27 L120 8 L180 8 L180 27 L240 27" : settings.oscillator2.waveform === "triangle" ? "M0 27 L30 5 L60 27 L90 5 L120 27 L150 5 L180 27 L210 5 L240 27" : "M0 17 C15 -2 45 -2 60 17 S105 36 120 17 S165 -2 180 17 S225 36 240 17"} /></svg><span>{settings.oscillator2.hardSync ? "HARD-SYNC WAVEFORM" : "WAVEFORM MONITOR"}</span></div>
         <div className="vco2-mod-controls">
           <div className="vco2-mod-heading"><span>VCO 2 MODES</span><small>Controls that change how VCO 2 interacts with VCO 1</small></div>
           <button type="button" className={`sync-button ${settings.oscillator2.hardSync ? "is-active" : ""}`} aria-pressed={settings.oscillator2.hardSync} onClick={() => update("oscillator2", { ...settings.oscillator2, hardSync: !settings.oscillator2.hardSync })}>
             <span className="sync-indicator" />
-            <span><strong>HARD SYNC</strong><small>Reset VCO 2 at each VCO 1 cycle</small></span>
+            <span><strong>HARD SYNC</strong><small>Reset VCO 2 at each VCO 1 cycle; overrides its waveform</small></span>
             <b>{settings.oscillator2.hardSync ? "ON" : "OFF"}</b>
           </button>
           <div className="vco2-fm-control">
@@ -322,9 +322,9 @@ export default function App() {
       </div>
     </section>
 
-    <div className="section-kicker"><span>04</span> MODULAR ROUTING <i /></div>
+    <div className="section-kicker"><span>04</span> SIGNAL FLOW <i /></div>
     <section className="module routing-module">
-      <div className="module-heading"><span className="module-led cyan" /><div><span className="eyebrow">PATCH BAY / SIGNAL FLOW</span><h2>ROUTING MATRIX</h2></div><span className="module-index">PATCH / 001</span></div>
+      <div className="module-heading"><span className="module-led cyan" /><div><span className="eyebrow">FIXED AUDIO PATH + ROUTE SWITCHES</span><h2>AUDIO ROUTING</h2></div><span className="module-index">PATCH / 001</span></div>
       <div className="signal-flow" aria-label="Main audio signal path">
         <div className="signal-stage"><span>01</span><strong>OSCILLATORS</strong><small>VCO 1 + VCO 2</small></div>
         <span className="signal-arrow">→</span>
