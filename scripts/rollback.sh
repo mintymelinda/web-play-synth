@@ -5,6 +5,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DATA_DIR="${SYNTH_DATA_DIR:-$ROOT_DIR/data}"
+# Support both the Docker Compose plugin and Synology's standalone v1 CLI.
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE=(docker-compose)
+else
+    echo "Docker Compose is required (docker compose or docker-compose)." >&2
+    exit 1
+fi
 CURRENT_LINK="$DATA_DIR/current"
 PREVIOUS_LINK="$DATA_DIR/previous"
 TEMP_CURRENT="$DATA_DIR/.rollback-current-$$"
@@ -34,5 +43,5 @@ fi
 ln -s "$previous_target" "$TEMP_CURRENT"
 mv -Tf "$TEMP_CURRENT" "$CURRENT_LINK"
 
-docker compose up -d --no-deps web-play-synth
+"${COMPOSE[@]}" up -d --no-deps web-play-synth
 echo "Rolled back to $previous_target"
