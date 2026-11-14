@@ -35,7 +35,7 @@ jobs:
             os: windows-latest
             artifact: web-play-synth-windows-x86_64
           - platform: macos-universal
-            os: macos-14
+            os: macos-15
             artifact: web-play-synth-macos-universal
     runs-on: ${{ matrix.os }}
     steps:
