@@ -24,7 +24,8 @@ public:
     void changeProgramName(int, const juce::String&) override {}
     void getStateInformation(juce::MemoryBlock& destinationData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
-    juce::AudioProcessorValueTreeState parameters;
+    using ParameterState = juce::AudioProcessorValueTreeState;
+    ParameterState parameters;
 private:
     struct Parameters {
         int osc1Wave=2, osc2Wave=3, lfoWave=0;
