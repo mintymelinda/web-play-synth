@@ -435,20 +435,23 @@ export default function App() {
       let lastUiUpdate = 0;
       let lastFrequency = 0;
       let silenceSince = 0;
+      let lastAnalysis = 0;
+      let gateOpen = false;
       const tick = (time: number) => {
-        analyser.getFloatTimeDomainData(samples);
-        const frequency = detectFundamental(samples, context.sampleRate);
+        if (time - lastAnalysis >= 35) {
+          lastAnalysis = time;
+          analyser.getFloatTimeDomainData(samples);
+          const frequency = detectFundamental(samples, context.sampleRate);
         if (frequency !== null) {
           silenceSince = 0;
           if (Math.abs(frequency - lastFrequency) > 0.8) {
             engine.current.setVoicePitch(microphoneVoiceNote.current, frequency);
             lastFrequency = frequency;
           }
-          if (!microphoneVoiceStarted.current) {
-            engine.current.noteOn(microphoneVoiceNote.current, 0, frequency);
-            microphoneVoiceStarted.current = true;
+          if (!gateOpen) {
+            engine.current.setVoiceGate(microphoneVoiceNote.current, true);
+            gateOpen = true;
           }
-          engine.current.setVoiceGate(microphoneVoiceNote.current, true);
           if (time - lastUiUpdate > 120) {
             const named = pitchName(frequency);
             setMicrophonePitch({ frequency, ...named });
@@ -457,13 +460,15 @@ export default function App() {
           }
         } else {
           if (!silenceSince) silenceSince = time;
-          if (time - silenceSince > 140 && microphoneVoiceStarted.current) {
+          if (time - silenceSince > 140 && gateOpen) {
             engine.current.setVoiceGate(microphoneVoiceNote.current, false);
+            gateOpen = false;
           }
           if (time - lastUiUpdate > 180) {
             setMicrophonePitch(null);
             setMicrophoneStatus("LISTENING · HUM OR SING A NOTE");
             lastUiUpdate = time;
+          }
           }
         }
         microphoneFrame.current = requestAnimationFrame(tick);
