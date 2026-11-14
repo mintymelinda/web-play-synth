@@ -39,6 +39,46 @@ int main()
     const auto restoredCutoff = processor.parameters.getRawParameterValue("cutoff")->load();
     require(std::abs(originalCutoff - restoredCutoff) < 0.01f, "plugin state must restore parameter values");
 
+    // MIDI CC learn maps a controller to a host parameter and applies the
+    // controller value through JUCE's normalized parameter interface.
+    processor.setMidiCcLearnTarget("cutoff");
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 74, 127), 0);
+    processor.processBlock(audio, midi);
+    const auto ccCutoff = processor.parameters.getRawParameterValue("cutoff")->load();
+    require(ccCutoff > 17000.0f, "learned MIDI CC must update its assigned parameter");
+
+    // A new assignment of the same CC replaces the old target.
+    processor.setMidiCcLearnTarget("resonance");
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 74, 64), 0);
+    processor.processBlock(audio, midi);
+    require(processor.getMidiCcMappingForParameter("cutoff").isEmpty(), "reassigning a CC must clear its previous parameter");
+    require(processor.getMidiCcMappingForParameter("resonance") == "74", "reassigned CC must target the newly learned parameter");
+
+    // CC mappings are serialized alongside APVTS parameter state.
+    juce::MemoryBlock mappedState;
+    processor.getStateInformation(mappedState);
+    WebPlaySynthAudioProcessor restoredProcessor;
+    restoredProcessor.setStateInformation(mappedState.getData(), static_cast<int>(mappedState.getSize()));
+    require(restoredProcessor.getMidiCcMappingForParameter("resonance") == "74", "MIDI CC assignments must survive state restore");
+
+    // A parameter can have only one CC; learning another CC for the same
+    // parameter replaces its previous assignment.
+    restoredProcessor.setMidiCcLearnTarget("resonance");
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 71, 0), 0);
+    restoredProcessor.processBlock(audio, midi);
+    require(restoredProcessor.getMidiCcMappingForParameter("resonance") == "71", "a parameter must retain only its latest learned CC");
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 71, 0), 0);
+    restoredProcessor.processBlock(audio, midi);
+    require(std::abs(restoredProcessor.parameters.getRawParameterValue("resonance")->load() - 0.1f) < 0.02f,
+        "restored MIDI CC must continue controlling its parameter");
+
+    restoredProcessor.clearMidiCcMapping("resonance");
+    require(restoredProcessor.getMidiCcMappingForParameter("resonance").isEmpty(), "clearing a mapping must remove the assignment");
+
     midi.clear();
     midi.addEvent(juce::MidiMessage::noteOff(1, 60), 0);
     processor.processBlock(audio, midi);

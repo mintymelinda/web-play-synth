@@ -10,7 +10,7 @@ const auto muted = juce::Colour(0xff8794a6);
 }
 
 WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthAudioProcessor& p)
-    : AudioProcessorEditor(p), state(p.parameters)
+    : AudioProcessorEditor(p), synthProcessor(p), state(p.parameters)
 {
     setResizable(true, true);
     setResizeLimits(760, 700, 1440, 1200);
@@ -64,8 +64,81 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addToggle("filterEnvEnabled", "FILTER ENV → VCF", groupSlots[7]);
     addToggle("ampEnvEnabled", "AMP ENV → VCA", groupSlots[7]);
 
+    midiCcGroup = std::make_unique<juce::GroupComponent>();
+    midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
+    midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
+    midiCcGroup->setColour(juce::GroupComponent::textColourId, violet);
+    addAndMakeVisible(*midiCcGroup);
+
+    midiCcTarget = std::make_unique<juce::ComboBox>();
+    const juce::StringArray parameterIds {
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
+        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+        "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+        "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "filterEnvEnabled", "ampEnvEnabled"
+    };
+    const juce::StringArray parameterNames {
+        "VCO 1 Waveform", "VCO 2 Waveform", "VCO 1 Octave", "VCO 1 Tune", "VCO 1 Level",
+        "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "Hard Sync", "Cross Modulation",
+        "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Env Attack", "Filter Env Decay",
+        "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
+        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth",
+        "Master Level", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
+        "Filter Env Route", "Amp Env Route"
+    };
+    for (int i = 0; i < parameterIds.size(); ++i)
+        midiCcTarget->addItem(parameterNames[i], i + 1);
+    midiCcTarget->setColour(juce::ComboBox::backgroundColourId, panel);
+    midiCcTarget->setColour(juce::ComboBox::textColourId, text);
+    midiCcTarget->setColour(juce::ComboBox::outlineColourId, border);
+    midiCcTarget->setSelectedId(1, juce::dontSendNotification);
+    addAndMakeVisible(*midiCcTarget);
+
+    midiCcLearnButton = std::make_unique<juce::TextButton>("LEARN CC");
+    midiCcLearnButton->onClick = [this] {
+        const juce::StringArray parameterIds {
+            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
+            "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+            "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+            "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+            "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "filterEnvEnabled", "ampEnvEnabled"
+        };
+        const auto index = midiCcTarget->getSelectedId() - 1;
+        if (juce::isPositiveAndBelow(index, parameterIds.size()))
+            synthProcessor.setMidiCcLearnTarget(parameterIds[index]);
+    };
+    addAndMakeVisible(*midiCcLearnButton);
+
+    midiCcClearButton = std::make_unique<juce::TextButton>("CLEAR");
+    midiCcClearButton->onClick = [this] {
+        const juce::StringArray parameterIds {
+            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
+            "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+            "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+            "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+            "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "filterEnvEnabled", "ampEnvEnabled"
+        };
+        const auto index = midiCcTarget->getSelectedId() - 1;
+        if (juce::isPositiveAndBelow(index, parameterIds.size()))
+            synthProcessor.clearMidiCcMapping(parameterIds[index]);
+    };
+    addAndMakeVisible(*midiCcClearButton);
+
+    midiCcStatus = std::make_unique<juce::Label>();
+    midiCcStatus->setColour(juce::Label::textColourId, muted);
+    midiCcStatus->setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(*midiCcStatus);
+    startTimerHz(8);
+
     // Build all child components before sizing: setSize() invokes resized().
-    setSize(980, 880);
+    setSize(980, 960);
 }
 
 void WebPlaySynthAudioProcessorEditor::addGroup(const juce::String& title, std::vector<Slot>&)
@@ -175,6 +248,26 @@ void WebPlaySynthAudioProcessorEditor::paint(juce::Graphics& g)
     g.drawText("HOST AUTOMATABLE  •  16 VOICE POLYPHONY", getWidth() - 310, 18, 290, 20, juce::Justification::right);
 }
 
+void WebPlaySynthAudioProcessorEditor::timerCallback()
+{
+    const auto index = midiCcTarget->getSelectedId() - 1;
+    const juce::StringArray parameterIds {
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
+        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+        "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+        "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "filterEnvEnabled", "ampEnvEnabled"
+    };
+    if (synthProcessor.isMidiCcLearning())
+        midiCcStatus->setText("Move a MIDI CC control to assign it…", juce::dontSendNotification);
+    else if (juce::isPositiveAndBelow(index, parameterIds.size())) {
+        const auto mapping = synthProcessor.getMidiCcMappingForParameter(parameterIds[index]);
+        midiCcStatus->setText(mapping.isNotEmpty() ? "Assigned to MIDI CC " + mapping : "No MIDI CC assigned", juce::dontSendNotification);
+    }
+}
+
 void WebPlaySynthAudioProcessorEditor::resized()
 {
     // Host/editor frameworks may request layout during construction or teardown.
@@ -184,6 +277,8 @@ void WebPlaySynthAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced(16);
     area.removeFromTop(58);
     const auto gap = 10;
+    auto mappingArea = area.removeFromBottom(88);
+    area.removeFromBottom(gap);
     const auto halfWidth = (area.getWidth() - gap) / 2;
     const auto rowHeight = (area.getHeight() - gap * 3) / 4;
 
@@ -198,4 +293,14 @@ void WebPlaySynthAudioProcessorEditor::resized()
     auto row4 = row3 + rowHeight + gap;
     layoutGroup(6, { area.getX(), row4, halfWidth, rowHeight }, 3);
     layoutGroup(7, { area.getX() + halfWidth + gap, row4, halfWidth, rowHeight }, 2);
+
+    midiCcGroup->setBounds(mappingArea);
+    auto controls = mappingArea.reduced(12, 25);
+    midiCcTarget->setBounds(controls.removeFromLeft(330).reduced(0, 4));
+    controls.removeFromLeft(8);
+    midiCcLearnButton->setBounds(controls.removeFromLeft(112).reduced(0, 4));
+    controls.removeFromLeft(6);
+    midiCcClearButton->setBounds(controls.removeFromLeft(82).reduced(0, 4));
+    controls.removeFromLeft(12);
+    midiCcStatus->setBounds(controls);
 }

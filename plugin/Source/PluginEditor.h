@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-class WebPlaySynthAudioProcessorEditor final : public juce::AudioProcessorEditor {
+class WebPlaySynthAudioProcessorEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit WebPlaySynthAudioProcessorEditor(WebPlaySynthAudioProcessor&);
     ~WebPlaySynthAudioProcessorEditor() override = default;
@@ -28,7 +28,9 @@ private:
     void addChoice(const juce::String& id, const juce::String& label, const juce::StringArray& choices, std::vector<Slot>& slots);
     void addToggle(const juce::String& id, const juce::String& label, std::vector<Slot>& slots);
     void layoutGroup(int groupIndex, juce::Rectangle<int> bounds, int columns);
+    void timerCallback() override;
 
+    WebPlaySynthAudioProcessor& synthProcessor;
     State& state;
     std::vector<std::unique_ptr<juce::GroupComponent>> groups;
     std::vector<std::vector<Slot>> groupSlots;
@@ -39,6 +41,10 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> sliderAttachments;
     std::vector<std::unique_ptr<ComboAttachment>> comboAttachments;
     std::vector<std::unique_ptr<ButtonAttachment>> buttonAttachments;
+    std::unique_ptr<juce::GroupComponent> midiCcGroup;
+    std::unique_ptr<juce::ComboBox> midiCcTarget;
+    std::unique_ptr<juce::TextButton> midiCcLearnButton, midiCcClearButton;
+    std::unique_ptr<juce::Label> midiCcStatus;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebPlaySynthAudioProcessorEditor)
 };
