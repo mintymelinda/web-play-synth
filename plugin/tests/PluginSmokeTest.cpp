@@ -63,6 +63,19 @@ int main()
     restoredProcessor.setStateInformation(mappedState.getData(), static_cast<int>(mappedState.getSize()));
     require(restoredProcessor.getMidiCcMappingForParameter("resonance") == "74", "MIDI CC assignments must survive state restore");
 
+    // A parameter can have only one CC; learning another CC for the same
+    // parameter replaces its previous assignment.
+    restoredProcessor.setMidiCcLearnTarget("resonance");
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 71, 0), 0);
+    restoredProcessor.processBlock(audio, midi);
+    require(restoredProcessor.getMidiCcMappingForParameter("resonance") == "71", "a parameter must retain only its latest learned CC");
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 71, 0), 0);
+    restoredProcessor.processBlock(audio, midi);
+    require(std::abs(restoredProcessor.parameters.getRawParameterValue("resonance")->load() - 0.1f) < 0.02f,
+        "restored MIDI CC must continue controlling its parameter");
+
     restoredProcessor.clearMidiCcMapping("resonance");
     require(restoredProcessor.getMidiCcMappingForParameter("resonance").isEmpty(), "clearing a mapping must remove the assignment");
 
