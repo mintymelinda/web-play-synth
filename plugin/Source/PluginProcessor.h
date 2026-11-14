@@ -27,7 +27,18 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
     using ParameterState = juce::AudioProcessorValueTreeState;
     ParameterState parameters;
+
+    // MIDI CC assignments target host-automatable parameters. A single CC maps
+    // to at most one parameter and each parameter has at most one assigned CC.
+    void setMidiCcLearnTarget(const juce::String& parameterId);
+    void clearMidiCcMapping(const juce::String& parameterId);
+    juce::String getMidiCcMappingForParameter(const juce::String& parameterId) const;
+    bool isMidiCcLearning() const noexcept { return midiCcLearnTarget.load() >= 0; }
+
 private:
+    static const juce::StringArray& midiCcParameterIds();
+    std::array<std::atomic<int>, 128> midiCcToParameter {};
+    std::atomic<int> midiCcLearnTarget { -1 };
     struct Parameters {
         int osc1Wave=2, osc2Wave=3, lfoWave=0;
         float osc1Octave=0, osc1Tune=0, osc1Level=.72f, osc2Octave=0, osc2Tune=7, osc2Level=.38f;
