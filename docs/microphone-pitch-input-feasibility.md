@@ -55,6 +55,9 @@ The pitch-analysis worker must never call into the synth voice pool, mutate APVT
 - Do not enumerate devices, open AudioDeviceManager, request permissions, or access platform microphone APIs from plugin code.
 - The user enables the bus and routes a mono audio track/input to it in the DAW. The editor should show a clear “no pitch input routed” / “tracking” state rather than pretending to know which physical microphone is selected.
 - Keep the bus disabled by default so existing sessions and hosts retain their current behavior.
+- Use JUCE's bus-aware buffer access (getBusBuffer / getChannelIndexInProcessBlockBuffer) rather than assuming input and output channels occupy the same offsets.
+- JUCE documents that processBlock receives at least the maximum of total input/output channels. Input-only channels may be read-only when there are more inputs than outputs. The current unconditional whole-buffer clear must therefore be replaced with bus-aware output clearing: inspect/copy the input first, then clear/write only the output bus. Never clear or write input-only channels.
+- JUCE references: [AudioProcessor::processBlock and getBusBuffer](https://docs.juce.com/develop/classjuce_1_1AudioProcessor.html), [JUCE audio bus layout tutorial](https://juce.com/tutorials/tutorial_audio_bus_layouts/).
 
 **Important compatibility risk:** Some DAWs do not expose audio routing into instrument plugins, or expose it differently for instrument/sidechain buses. pluginval can validate plugin structure and processing but cannot prove the routing UI exists or works in a real DAW. Do not mark the feature generally supported until the host matrix below is exercised.
 
