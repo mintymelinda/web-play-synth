@@ -20,3 +20,25 @@ jobs:
       - run: npm run build
       - name: Check deployment scripts
         run: bash -n scripts/deploy.sh scripts/rollback.sh
+
+  native-vst3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install JUCE Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            libx11-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libgl1-mesa-dev
+      - name: Configure native plugin
+        run: cmake -S plugin -B build/plugin -DCMAKE_BUILD_TYPE=Release
+      - name: Build VST3
+        run: cmake --build build/plugin --config Release --target WebPlaySynth_VST3 --parallel 2
