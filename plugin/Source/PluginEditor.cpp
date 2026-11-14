@@ -10,7 +10,7 @@ const auto muted = juce::Colour(0xff8794a6);
 }
 
 WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthAudioProcessor& p)
-    : AudioProcessorEditor(p), processor(p), state(p.parameters)
+    : AudioProcessorEditor(p), synthProcessor(p), state(p.parameters)
 {
     setResizable(true, true);
     setResizeLimits(760, 700, 1440, 1200);
@@ -110,7 +110,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
         if (juce::isPositiveAndBelow(index, parameterIds.size()))
-            processor.setMidiCcLearnTarget(parameterIds[index]);
+            synthProcessor.setMidiCcLearnTarget(parameterIds[index]);
     };
     addAndMakeVisible(*midiCcLearnButton);
 
@@ -127,7 +127,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
         if (juce::isPositiveAndBelow(index, parameterIds.size()))
-            processor.clearMidiCcMapping(parameterIds[index]);
+            synthProcessor.clearMidiCcMapping(parameterIds[index]);
     };
     addAndMakeVisible(*midiCcClearButton);
 
@@ -260,16 +260,20 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
-    if (processor.isMidiCcLearning())
+    if (synthProcessor.isMidiCcLearning())
         midiCcStatus->setText("Move a MIDI CC control to assign it…", juce::dontSendNotification);
     else if (juce::isPositiveAndBelow(index, parameterIds.size())) {
-        const auto mapping = processor.getMidiCcMappingForParameter(parameterIds[index]);
+        const auto mapping = synthProcessor.getMidiCcMappingForParameter(parameterIds[index]);
         midiCcStatus->setText(mapping.isNotEmpty() ? "Assigned to MIDI CC " + mapping : "No MIDI CC assigned", juce::dontSendNotification);
     }
 }
 
 void WebPlaySynthAudioProcessorEditor::resized()
 {
+    // Host/editor frameworks may request layout during construction or teardown.
+    if (groups.size() != 8 || groupSlots.size() != 8)
+        return;
+
     auto area = getLocalBounds().reduced(16);
     area.removeFromTop(58);
     const auto gap = 10;
