@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <atomic>
 
 class WebPlaySynthAudioProcessor final : public juce::AudioProcessor {
 public:
