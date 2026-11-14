@@ -169,7 +169,9 @@ export class SynthEngine {
         const glideEnd = now + this.settings.glide.time;
         const offsets = [
           2 ** ((this.settings.oscillator1.octave * 12 + this.settings.oscillator1.tune) / 12),
-          2 ** ((this.settings.oscillator2.octave * 12 + this.settings.oscillator2.tune) / 12),
+          this.settings.oscillator2.hardSync
+            ? 2 ** ((this.settings.oscillator1.octave * 12 + this.settings.oscillator1.tune) / 12)
+            : 2 ** ((this.settings.oscillator2.octave * 12 + this.settings.oscillator2.tune) / 12),
         ];
         voice.oscillators.forEach((oscillator, index) => {
           const target = targetFrequency * offsets[index];
