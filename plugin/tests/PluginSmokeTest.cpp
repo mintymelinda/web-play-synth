@@ -101,6 +101,11 @@ int main()
     // existing instrument's MIDI-only layout until a host explicitly routes it.
     WebPlaySynthAudioProcessor inputProcessor;
     require(!inputProcessor.getBus(true, 0)->isEnabled(), "pitch input bus must be disabled by default");
+    const auto defaultLayout = inputProcessor.getBusesLayout();
+    require(inputProcessor.checkBusesLayoutSupported(defaultLayout), "default disabled-input stereo-output layout must remain supported");
+    auto monoOutputLayout = defaultLayout;
+    monoOutputLayout.outputBuses.set(0, juce::AudioChannelSet::mono());
+    require(inputProcessor.checkBusesLayoutSupported(monoOutputLayout), "disabled-input mono-output layout must remain supported");
     auto inputLayout = inputProcessor.getBusesLayout();
     inputLayout.inputBuses.set(0, juce::AudioChannelSet::mono());
     require(inputProcessor.setBusesLayout(inputLayout), "processor must accept an enabled mono pitch input bus");
