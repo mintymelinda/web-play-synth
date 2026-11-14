@@ -86,6 +86,53 @@ jobs:
           --platform "${{ matrix.platform }}"
           --root "build/plugin/WebPlaySynth_artefacts/Release"
 
+      - name: Download pluginval (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Linux.zip \
+            --output pluginval.zip
+          mkdir -p pluginval-bin
+          unzip -q pluginval.zip -d pluginval-bin
+          chmod +x pluginval-bin/pluginval
+
+      - name: Download pluginval (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip -OutFile pluginval.zip
+          Expand-Archive -Path pluginval.zip -DestinationPath pluginval-bin
+
+      - name: Download pluginval (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip \
+            --output pluginval.zip
+          mkdir -p pluginval-bin
+          unzip -q pluginval.zip -d pluginval-bin
+          chmod +x pluginval-bin/pluginval.app/Contents/MacOS/pluginval
+
+      - name: Validate VST3 with pluginval (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run --auto-servernum pluginval-bin/pluginval \
+            --validate-in-process --strictness-level 5 \
+            --validate "build/plugin/WebPlaySynth_artefacts/Release/VST3/Web Play Synth.vst3"
+
+      - name: Validate VST3 with pluginval (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          pluginval-bin\\pluginval.exe --validate-in-process --strictness-level 5 --validate "build\\plugin\\WebPlaySynth_artefacts\\Release\\VST3\\Web Play Synth.vst3"
+
+      - name: Validate VST3 with pluginval (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pluginval-bin/pluginval.app/Contents/MacOS/pluginval \
+            --validate-in-process --strictness-level 5 \
+            --validate "build/plugin/WebPlaySynth_artefacts/Release/VST3/Web Play Synth.vst3"
+
       - name: Package Linux plugin formats
         if: runner.os == 'Linux'
         run: |
@@ -112,10 +159,87 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  sign-and-notarize-macos:
+    name: Sign and notarize macOS distribution
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [native-vst3]
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-play-synth-macos-universal
+          path: macos-package
+      - name: Require Apple signing and notarization credentials
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          API_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+          ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+        run: |
+          for name in CERTIFICATE CERTIFICATE_PASSWORD API_KEY API_KEY_ID ISSUER_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required GitHub secret/variable for macOS signing: $name"
+              exit 1
+            fi
+          done
+      - name: Import Developer ID certificate
+        uses: Apple-Actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      - name: Extract and sign macOS bundles
+        id: sign
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p macos-dist
+          archive="$(find macos-package -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test -n "$archive"
+          tar -xzf "$archive" -C macos-dist
+          identity="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application:/ { print $2; exit }')"
+          if [[ -z "$identity" ]]; then
+            echo "::error::No Developer ID Application identity was imported"
+            exit 1
+          fi
+          vst3="$(find macos-dist -type d -name '*.vst3' -print -quit)"
+          app="$(find macos-dist/Standalone -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$vst3" && test -n "$app"
+          codesign --force --deep --options runtime --timestamp --sign "$identity" "$vst3"
+          codesign --force --deep --options runtime --timestamp --sign "$identity" "$app"
+          codesign --verify --deep --strict --verbose=2 "$vst3"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          ditto -c -k --sequesterRsrc --keepParent macos-dist signed-macos.zip
+          hdiutil create -volname "Web Play Synth" -srcfolder macos-dist -ov -format UDZO Web-Play-Synth-macOS.dmg
+          codesign --force --timestamp --sign "$identity" Web-Play-Synth-macOS.dmg
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Notarize and staple macOS disk image
+        uses: Apple-Actions/notarize@v1
+        with:
+          path: Web-Play-Synth-macOS.dmg
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          staple: true
+      - name: Verify stapled notarization ticket
+        run: |
+          xcrun stapler validate Web-Play-Synth-macOS.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=2 Web-Play-Synth-macOS.dmg
+      - name: Upload signed and notarized macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-play-synth-macos-signed-notarized
+          path: Web-Play-Synth-macOS.dmg
+          if-no-files-found: error
+          retention-days: 14
+
   publish-release:
     name: Publish cross-platform release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, native-vst3]
+    needs: [build, native-vst3, sign-and-notarize-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,6 +252,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
+      - name: Remove unsigned macOS archive from public release assets
+        run: rm -f release-assets/web-play-synth-macos-universal/*.tar.gz
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
