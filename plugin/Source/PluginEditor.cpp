@@ -95,6 +95,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     midiCcTarget->setColour(juce::ComboBox::backgroundColourId, panel);
     midiCcTarget->setColour(juce::ComboBox::textColourId, text);
     midiCcTarget->setColour(juce::ComboBox::outlineColourId, border);
+    midiCcTarget->setSelectedId(1, juce::dontSendNotification);
     addAndMakeVisible(*midiCcTarget);
 
     midiCcLearnButton = std::make_unique<juce::TextButton>("LEARN CC");
