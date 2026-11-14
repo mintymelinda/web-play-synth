@@ -10,6 +10,7 @@ public:
     void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override;
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+    float getPitchInputRms() const noexcept { return pitchInputRms.load(std::memory_order_relaxed); }
     using juce::AudioProcessor::processBlock;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     juce::AudioProcessorEditor* createEditor() override;
@@ -40,6 +41,7 @@ private:
     static const juce::StringArray& midiCcParameterIds();
     std::array<std::atomic<int>, 128> midiCcToParameter {};
     std::atomic<int> midiCcLearnTarget { -1 };
+    std::atomic<float> pitchInputRms { 0.0f };
     struct Parameters {
         int osc1Wave=2, osc2Wave=3, lfoWave=0;
         float osc1Octave=0, osc1Tune=0, osc1Level=.72f, osc2Octave=0, osc2Tune=7, osc2Level=.38f;
