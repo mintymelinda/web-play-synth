@@ -27,6 +27,7 @@ target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
 include(CTest)
 if(BUILD_TESTING)
     add_executable(WebPlaySynthSmokeTest tests/PluginSmokeTest.cpp)
+    juce_generate_juce_header(WebPlaySynthSmokeTest)
     target_include_directories(WebPlaySynthSmokeTest PRIVATE Source)
     target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthSmokeTest PRIVATE WebPlaySynth juce::juce_audio_utils)
