@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -22,10 +23,26 @@ jobs:
         run: bash -n scripts/deploy.sh scripts/rollback.sh
 
   native-vst3:
-    runs-on: ubuntu-latest
+    name: Native VST3 (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+            artifact: web-play-synth-linux-x86_64
+          - platform: windows-x86_64
+            os: windows-latest
+            artifact: web-play-synth-windows-x86_64
+          - platform: macos-universal
+            os: macos-14
+            artifact: web-play-synth-macos-universal
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Install JUCE Linux build dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -38,19 +55,77 @@ jobs:
             libxrandr-dev \
             libxcursor-dev \
             libgl1-mesa-dev
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Configure native plugin and smoke tests
-        run: cmake -S plugin -B build/plugin -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+        shell: bash
+        run: |
+          cmake_args=(
+            -S plugin
+            -B build/plugin
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_TESTING=ON
+          )
+          if [[ "${{ matrix.platform }}" == "macos-universal" ]]; then
+            cmake_args+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64")
+          fi
+          cmake "${cmake_args[@]}"
+
       - name: Build VST3, Standalone, and smoke test
         run: cmake --build build/plugin --config Release --parallel 2
+
       - name: Run native audio and MIDI smoke test
         run: ctest --test-dir build/plugin -C Release --output-on-failure
+
+      - name: Verify plugin formats and target architectures
+        run: >-
+          python scripts/verify_native_package.py
+          --platform "${{ matrix.platform }}"
+          --root "build/plugin/WebPlaySynth_artefacts/Release"
+
       - name: Package Linux plugin formats
+        if: runner.os == 'Linux'
         run: |
-          tar -czf web-play-synth-linux-x86_64.tar.gz \
+          tar -czf ${{ matrix.artifact }}.tar.gz \
             -C build/plugin/WebPlaySynth_artefacts/Release VST3 Standalone
-      - uses: actions/upload-artifact@v4
+
+      - name: Package Windows plugin formats
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/plugin/WebPlaySynth_artefacts/Release/VST3,build/plugin/WebPlaySynth_artefacts/Release/Standalone -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Package macOS plugin formats
+        if: runner.os == 'macOS'
+        run: |
+          tar -czf ${{ matrix.artifact }}.tar.gz \
+            -C build/plugin/WebPlaySynth_artefacts/Release VST3 Standalone
+
+      - name: Upload platform package
+        uses: actions/upload-artifact@v4
         with:
-          name: web-play-synth-linux-x86_64
-          path: web-play-synth-linux-x86_64.tar.gz
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.*
           if-no-files-found: error
           retention-days: 14
+
+  publish-release:
+    name: Publish cross-platform release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, native-vst3]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/**/*
