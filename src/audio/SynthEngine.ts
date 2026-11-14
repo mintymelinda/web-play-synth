@@ -15,6 +15,7 @@ export interface SynthSettings {
   filterEnvelope: Envelope;
   ampEnvelope: Envelope;
   master: number;
+  glide: { enabled: boolean; time: number };
   routing: { vco1: boolean; vco2: boolean; filterEnv: boolean; ampEnv: boolean };
 }
 
@@ -42,6 +43,7 @@ const DEFAULT_SETTINGS: SynthSettings = {
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
+  glide: { enabled: false, time: 0.18 },
   routing: { vco1: true, vco2: true, filterEnv: true, ampEnv: true },
 };
 
@@ -81,6 +83,7 @@ export class SynthEngine {
   private voices = new Map<number, Voice>();
   private syncWaves = new Map<number, PeriodicWave>();
   private settings: SynthSettings = structuredClone(DEFAULT_SETTINGS);
+  private lastPlayedFrequency: number | null = null;
 
   get isReady() {
     return this.context !== null && this.context.state === "running";
@@ -156,6 +159,27 @@ export class SynthEngine {
     };
     this.voices.set(note, voice);
     this.updateVoice(voice);
+
+    // Portamento applies to keyboard/MIDI note changes, not the continuously tracked mic pitch.
+    if (pitchFrequency === null) {
+      const targetFrequency = 440 * 2 ** ((note - 69) / 12);
+      const glideFrom = this.lastPlayedFrequency;
+      this.lastPlayedFrequency = targetFrequency;
+      if (this.settings.glide.enabled && glideFrom !== null && this.settings.glide.time > 0) {
+        const glideEnd = now + this.settings.glide.time;
+        const offsets = [
+          2 ** ((this.settings.oscillator1.octave * 12 + this.settings.oscillator1.tune) / 12),
+          2 ** ((this.settings.oscillator2.octave * 12 + this.settings.oscillator2.tune) / 12),
+        ];
+        voice.oscillators.forEach((oscillator, index) => {
+          const target = targetFrequency * offsets[index];
+          const start = glideFrom * offsets[index];
+          oscillator.frequency.cancelScheduledValues(now);
+          oscillator.frequency.setValueAtTime(Math.max(0.01, start), now);
+          oscillator.frequency.exponentialRampToValueAtTime(Math.max(0.01, target), glideEnd);
+        });
+      }
+    }
 
     const ampEnv = this.settings.ampEnvelope;
     const filterEnv = this.settings.filterEnvelope;
