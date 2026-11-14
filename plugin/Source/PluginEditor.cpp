@@ -10,9 +10,8 @@ const auto muted = juce::Colour(0xff8794a6);
 }
 
 WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthAudioProcessor& p)
-    : AudioProcessorEditor(p), processor(p), state(p.parameters)
+    : AudioProcessorEditor(p), state(p.parameters)
 {
-    setSize(980, 880);
     setResizable(true, true);
     setResizeLimits(760, 700, 1440, 1200);
 
@@ -64,6 +63,9 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addToggle("vco2Enabled", "VCO 2 AUDIO", groupSlots[7]);
     addToggle("filterEnvEnabled", "FILTER ENV → VCF", groupSlots[7]);
     addToggle("ampEnvEnabled", "AMP ENV → VCA", groupSlots[7]);
+
+    // Build all child components before sizing: setSize() invokes resized().
+    setSize(980, 880);
 }
 
 void WebPlaySynthAudioProcessorEditor::addGroup(const juce::String& title, std::vector<Slot>&)
@@ -175,6 +177,10 @@ void WebPlaySynthAudioProcessorEditor::paint(juce::Graphics& g)
 
 void WebPlaySynthAudioProcessorEditor::resized()
 {
+    // Host/editor frameworks may request layout during construction or teardown.
+    if (groups.size() != 8 || groupSlots.size() != 8)
+        return;
+
     auto area = getLocalBounds().reduced(16);
     area.removeFromTop(58);
     const auto gap = 10;

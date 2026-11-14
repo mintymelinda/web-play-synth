@@ -29,7 +29,6 @@ private:
     void addToggle(const juce::String& id, const juce::String& label, std::vector<Slot>& slots);
     void layoutGroup(int groupIndex, juce::Rectangle<int> bounds, int columns);
 
-    WebPlaySynthAudioProcessor& processor;
     State& state;
     std::vector<std::unique_ptr<juce::GroupComponent>> groups;
     std::vector<std::vector<Slot>> groupSlots;
