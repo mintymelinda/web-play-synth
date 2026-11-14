@@ -240,14 +240,10 @@ juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return 
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     if (auto xml = parameters.copyState().createXml()) {
-        auto* mappings = xml->createNewChildElement("MIDI_CC_MAPPINGS");
         for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc) {
             const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
-            if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size()) {
-                auto* mapping = mappings->createNewChildElement("MAP");
-                mapping->setAttribute("cc", cc);
-                mapping->setAttribute("parameter", midiCcParameterIds()[parameterIndex]);
-            }
+            if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size())
+                xml->setAttribute("MIDI_CC_" + juce::String(cc), midiCcParameterIds()[parameterIndex]);
         }
         copyXmlToBinary(*xml, dest);
     }
@@ -263,15 +259,26 @@ void WebPlaySynthAudioProcessor::setStateInformation(const void* data, int size)
             assignment.store(-1);
         midiCcLearnTarget.store(-1);
 
+        // Store mappings as root attributes so they remain attached to the
+        // APVTS state across JUCE XML serialization and ValueTree restoration.
+        // Keep reading the earlier child-element representation for compatibility
+        // with states saved by pre-attribute builds.
+        for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc) {
+            const auto attribute = "MIDI_CC_" + juce::String(cc);
+            if (xml->hasAttribute(attribute)) {
+                const auto parameterIndex = midiCcParameterIds().indexOf(xml->getStringAttribute(attribute));
+                if (parameterIndex >= 0)
+                    midiCcToParameter[static_cast<size_t>(cc)].store(parameterIndex);
+            }
+        }
+
         if (auto* mappings = xml->getChildByName("MIDI_CC_MAPPINGS")) {
             for (auto* mapping = mappings->getFirstChildElement(); mapping != nullptr; mapping = mapping->getNextElement()) {
                 const auto cc = mapping->getIntAttribute("cc", -1);
                 const auto parameterIndex = midiCcParameterIds().indexOf(mapping->getStringAttribute("parameter"));
-                if (cc >= 0 && cc < static_cast<int>(midiCcToParameter.size()) && parameterIndex >= 0) {
-                    // Ignore malformed duplicate CC entries; the first valid entry wins.
-                    if (midiCcToParameter[static_cast<size_t>(cc)].load() < 0)
-                        midiCcToParameter[static_cast<size_t>(cc)].store(parameterIndex);
-                }
+                if (cc >= 0 && cc < static_cast<int>(midiCcToParameter.size()) && parameterIndex >= 0
+                    && midiCcToParameter[static_cast<size_t>(cc)].load() < 0)
+                    midiCcToParameter[static_cast<size_t>(cc)].store(parameterIndex);
             }
         }
 
