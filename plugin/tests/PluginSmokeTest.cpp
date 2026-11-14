@@ -48,9 +48,11 @@ int main()
     const auto releaseBlocks = (7 * 48000) / audio.getNumSamples();
     for (int block = 0; block < releaseBlocks; ++block) {
         processor.processBlock(audio, midi);
-        for (int channel = 0; channel < audio.getNumChannels(); ++channel)
-            for (int sample = 0; sample < audio.getNumSamples(); ++sample)
-                tailPeak = juce::jmax(tailPeak, std::abs(audio.getSample(channel, sample)));
+        if (block == releaseBlocks - 1) {
+            for (int channel = 0; channel < audio.getNumChannels(); ++channel)
+                for (int sample = 0; sample < audio.getNumSamples(); ++sample)
+                    tailPeak = juce::jmax(tailPeak, std::abs(audio.getSample(channel, sample)));
+        }
     }
 
     require(std::isfinite(tailPeak) && tailPeak < 0.0001f, "released voice must eventually return to silence");
