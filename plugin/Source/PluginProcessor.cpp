@@ -146,7 +146,7 @@ float WebPlaySynthAudioProcessor::oscillatorSample(double phase,double inc,int w
     else if(wave==3) { s+=polyBlep(phase,inc); auto shifted=phase+.5; if(shifted>=1) shifted-=1; s-=polyBlep(shifted,inc); }
     return s;
 }
-juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return new WebPlaySynthAudioProcessorEditor(*this); }
+juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return new juce::GenericAudioProcessorEditor(*this); }
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     if(auto xml=parameters.copyState().createXml()) copyXmlToBinary(*xml,dest);
