@@ -24,7 +24,7 @@ const notes = Array.from({ length: 25 }, (_, index) => ({
 }));
 
 
-const microphoneVoiceNote = 128;
+const microphoneVoiceNoteStart = 127;
 
 function detectFundamental(buffer: Float32Array, sampleRate: number): number | null {
   let rms = 0;
@@ -203,6 +203,7 @@ export default function App() {
   const microphoneContext = useRef<AudioContext | null>(null);
   const microphoneFrame = useRef<number | null>(null);
   const microphoneVoiceStarted = useRef(false);
+  const microphoneVoiceNote = useRef(microphoneVoiceNoteStart);
 
   useEffect(() => { engine.current.update(settings); }, [settings]);
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
@@ -392,7 +393,7 @@ export default function App() {
     void microphoneContext.current?.close();
     microphoneContext.current = null;
     if (microphoneVoiceStarted.current) {
-      engine.current.noteOff(microphoneVoiceNote);
+      engine.current.noteOff(microphoneVoiceNote.current);
       microphoneVoiceStarted.current = false;
     }
     setMicrophoneActive(false);
@@ -410,18 +411,23 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
+      microphoneStream.current = stream;
       const context = new AudioContext();
+      microphoneContext.current = context;
       const analyser = context.createAnalyser();
       analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0;
       const input = context.createMediaStreamSource(stream);
       input.connect(analyser);
+      const silentOutput = context.createGain();
+      silentOutput.gain.value = 0;
+      analyser.connect(silentOutput);
+      silentOutput.connect(context.destination);
       await context.resume();
       await engine.current.start();
-      engine.current.noteOn(microphoneVoiceNote, 0, 440);
+      microphoneVoiceNote.current += 1;
+      engine.current.noteOn(microphoneVoiceNote.current, 0, 440);
       microphoneVoiceStarted.current = true;
-      microphoneStream.current = stream;
-      microphoneContext.current = context;
       setMicrophoneActive(true);
       setMicrophoneStatus("LISTENING · HUM OR SING A NOTE");
 
@@ -435,14 +441,14 @@ export default function App() {
         if (frequency !== null) {
           silenceSince = 0;
           if (Math.abs(frequency - lastFrequency) > 0.8) {
-            engine.current.setVoicePitch(microphoneVoiceNote, frequency);
+            engine.current.setVoicePitch(microphoneVoiceNote.current, frequency);
             lastFrequency = frequency;
           }
           if (!microphoneVoiceStarted.current) {
-            engine.current.noteOn(microphoneVoiceNote, 0, frequency);
+            engine.current.noteOn(microphoneVoiceNote.current, 0, frequency);
             microphoneVoiceStarted.current = true;
           }
-          engine.current.setVoiceGate(microphoneVoiceNote, true);
+          engine.current.setVoiceGate(microphoneVoiceNote.current, true);
           if (time - lastUiUpdate > 120) {
             const named = pitchName(frequency);
             setMicrophonePitch({ frequency, ...named });
@@ -452,7 +458,7 @@ export default function App() {
         } else {
           if (!silenceSince) silenceSince = time;
           if (time - silenceSince > 140 && microphoneVoiceStarted.current) {
-            engine.current.setVoiceGate(microphoneVoiceNote, false);
+            engine.current.setVoiceGate(microphoneVoiceNote.current, false);
           }
           if (time - lastUiUpdate > 180) {
             setMicrophonePitch(null);
@@ -465,24 +471,17 @@ export default function App() {
       microphoneFrame.current = requestAnimationFrame(tick);
     } catch (error) {
       console.error("Unable to start microphone pitch input", error);
-      streamCleanup();
+      microphoneStream.current?.getTracks().forEach((track) => track.stop());
+      microphoneStream.current = null;
+      void microphoneContext.current?.close();
+      microphoneContext.current = null;
+      if (microphoneVoiceStarted.current) engine.current.noteOff(microphoneVoiceNote.current);
+      microphoneVoiceStarted.current = false;
+      setMicrophoneActive(false);
       setMicrophoneStatus(error instanceof DOMException && error.name === "NotAllowedError"
         ? "MICROPHONE PERMISSION DENIED"
         : "COULD NOT START MICROPHONE INPUT");
     }
-  };
-
-  const streamCleanup = () => {
-    microphoneStream.current?.getTracks().forEach((track) => track.stop());
-    microphoneStream.current = null;
-    void microphoneContext.current?.close();
-    microphoneContext.current = null;
-    if (microphoneVoiceStarted.current) {
-      engine.current.noteOff(microphoneVoiceNote);
-      microphoneVoiceStarted.current = false;
-    }
-    setMicrophoneActive(false);
-    setMicrophonePitch(null);
   };
 
   const disconnectMidi = () => {
@@ -512,6 +511,8 @@ export default function App() {
   useEffect(() => () => {
     if (microphoneFrame.current !== null) cancelAnimationFrame(microphoneFrame.current);
     microphoneStream.current?.getTracks().forEach((track) => track.stop());
+    if (microphoneVoiceStarted.current) engine.current.noteOff(microphoneVoiceNote.current);
+    microphoneVoiceStarted.current = false;
     void microphoneContext.current?.close();
   }, []);
 
