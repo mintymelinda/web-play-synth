@@ -30,7 +30,7 @@ private:
     void layoutGroup(int groupIndex, juce::Rectangle<int> bounds, int columns);
     void timerCallback() override;
 
-    WebPlaySynthAudioProcessor& processor;
+    WebPlaySynthAudioProcessor& synthProcessor;
     State& state;
     std::vector<std::unique_ptr<juce::GroupComponent>> groups;
     std::vector<std::vector<Slot>> groupSlots;
