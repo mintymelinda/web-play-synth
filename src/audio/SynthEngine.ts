@@ -29,6 +29,7 @@ interface Voice {
   amp: GainNode;
   voiceGain: GainNode;
   note: number;
+  pitchFrequency: number | null;
   released: boolean;
   connected: [boolean, boolean];
 }
@@ -103,7 +104,7 @@ export class SynthEngine {
     for (const voice of this.voices.values()) this.updateVoice(voice);
   }
 
-  noteOn(note: number, velocity = 0.82) {
+  noteOn(note: number, velocity = 0.82, pitchFrequency: number | null = null) {
     if (!this.context || !this.master || this.voices.has(note)) return;
     const context = this.context;
     const now = context.currentTime;
@@ -149,6 +150,7 @@ export class SynthEngine {
       amp,
       voiceGain,
       note,
+      pitchFrequency,
       released: false,
       connected: [false, false],
     };
@@ -177,6 +179,24 @@ export class SynthEngine {
 
     for (const oscillator of voice.oscillators) oscillator.start(now);
     lfo.start(now);
+  }
+
+  setVoicePitch(note: number, frequency: number) {
+    const voice = this.voices.get(note);
+    if (!voice || voice.released || !Number.isFinite(frequency) || frequency <= 0) return;
+    voice.pitchFrequency = clamp(frequency, 20, 20000);
+    this.updateVoice(voice);
+  }
+
+  setVoiceGate(note: number, open: boolean, velocity = 0.82) {
+    const voice = this.voices.get(note);
+    if (!voice || voice.released || !this.context) return;
+    const now = this.context.currentTime;
+    const level = open
+      ? (this.settings.routing.ampEnv ? velocity * this.settings.ampEnvelope.sustain : velocity)
+      : 0;
+    voice.amp.gain.cancelScheduledValues(now);
+    voice.amp.gain.setTargetAtTime(level, now, open ? 0.025 : 0.018);
   }
 
   noteOff(note: number) {
@@ -233,8 +253,9 @@ export class SynthEngine {
     if (!this.context) return;
     const now = this.context.currentTime;
     const { oscillator1, oscillator2, lfo, filter } = this.settings;
-    const baseFrequency1 = 440 * 2 ** ((voice.note - 69 + oscillator1.octave * 12 + oscillator1.tune) / 12);
-    const baseFrequency2 = 440 * 2 ** ((voice.note - 69 + oscillator2.octave * 12 + oscillator2.tune) / 12);
+    const noteFrequency = voice.pitchFrequency ?? 440 * 2 ** ((voice.note - 69) / 12);
+    const baseFrequency1 = noteFrequency * 2 ** ((oscillator1.octave * 12 + oscillator1.tune) / 12);
+    const baseFrequency2 = noteFrequency * 2 ** ((oscillator2.octave * 12 + oscillator2.tune) / 12);
     const syncRatio = baseFrequency2 / baseFrequency1;
 
     voice.oscillators[0].type = oscillator1.waveform;
