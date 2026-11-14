@@ -192,11 +192,16 @@ export class SynthEngine {
     const voice = this.voices.get(note);
     if (!voice || voice.released || !this.context) return;
     const now = this.context.currentTime;
-    const level = open
-      ? (this.settings.routing.ampEnv ? velocity * this.settings.ampEnvelope.sustain : velocity)
-      : 0;
     voice.amp.gain.cancelScheduledValues(now);
-    voice.amp.gain.setTargetAtTime(level, now, open ? 0.025 : 0.018);
+    voice.amp.gain.setValueAtTime(voice.amp.gain.value, now);
+    if (open && this.settings.routing.ampEnv) {
+      const envelope = this.settings.ampEnvelope;
+      voice.amp.gain.linearRampToValueAtTime(velocity, now + envelope.attack);
+      voice.amp.gain.linearRampToValueAtTime(velocity * envelope.sustain, now + envelope.attack + envelope.decay);
+    } else {
+      const release = this.settings.routing.ampEnv ? this.settings.ampEnvelope.release : 0.018;
+      voice.amp.gain.linearRampToValueAtTime(open ? velocity : 0, now + (open ? 0.025 : release));
+    }
   }
 
   noteOff(note: number) {
