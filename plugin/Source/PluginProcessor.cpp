@@ -21,7 +21,11 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
 
 WebPlaySynthAudioProcessor::WebPlaySynthAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),
-      parameters(*this,nullptr,"SYNTH_STATE",createParameterLayout()) {}
+      parameters(*this,nullptr,"SYNTH_STATE",createParameterLayout())
+{
+    for (auto& assignment : midiCcToParameter)
+        assignment.store(-1);
+}
 
 WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioProcessor::createParameterLayout()
 {
@@ -253,8 +257,8 @@ void WebPlaySynthAudioProcessor::setStateInformation(const void* data, int size)
             assignment.store(-1);
         midiCcLearnTarget.store(-1);
 
-        if (const auto* mappings = xml->getChildByName("MIDI_CC_MAPPINGS")) {
-            for (auto* mapping : mappings->getChildIterator()) {
+        if (auto* mappings = xml->getChildByName("MIDI_CC_MAPPINGS")) {
+            for (auto* mapping = mappings->getFirstChildElement(); mapping != nullptr; mapping = mapping->getNextElement()) {
                 const auto cc = mapping->getIntAttribute("cc", -1);
                 const auto parameterIndex = midiCcParameterIds().indexOf(mapping->getStringAttribute("parameter"));
                 if (cc >= 0 && cc < static_cast<int>(midiCcToParameter.size()) && parameterIndex >= 0) {
