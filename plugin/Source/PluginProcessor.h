@@ -9,6 +9,7 @@ public:
     void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override;
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+    using juce::AudioProcessor::processBlock;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }

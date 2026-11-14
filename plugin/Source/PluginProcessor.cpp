@@ -2,7 +2,6 @@
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
-juce::AudioParameterFloatAttributes cutoffSkew() { return juce::AudioParameterFloatAttributes().withCentreSkew(1200.0f); }
 }
 
 WebPlaySynthAudioProcessor::WebPlaySynthAudioProcessor()
@@ -12,8 +11,11 @@ WebPlaySynthAudioProcessor::WebPlaySynthAudioProcessor()
 WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioProcessor::createParameterLayout()
 {
     ParameterState::ParameterLayout l;
-    const auto f=[&](const char* id,const char* name,float lo,float hi,float v,float step=0.0f,juce::AudioParameterFloatAttributes a={}) {
-        l.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{id,1},name,juce::NormalisableRange<float>(lo,hi,step),v,a));
+    const auto f=[&](const char* id,const char* name,float lo,float hi,float v,float step=0.0f,float centre=0.0f) {
+        juce::NormalisableRange<float> range(lo,hi,step);
+        if (centre > lo && centre < hi)
+            range.setSkewForCentre(centre);
+        l.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{id,1},name,range,v));
     };
     const auto b=[&](const char* id,const char* name,bool v) { l.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{id,1},name,v)); };
     const auto c=[&](const char* id,const char* name,const juce::StringArray& choices,int v) { l.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{id,1},name,choices,v)); };
@@ -21,7 +23,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     f("osc1Octave","VCO 1 Octave",-2,2,0,1); f("osc1Tune","VCO 1 Tune",-12,12,0,1); f("osc1Level","VCO 1 Level",0,1,.72f);
     f("osc2Octave","VCO 2 Octave",-2,2,0,1); f("osc2Tune","VCO 2 Tune",-12,12,7,1); f("osc2Level","VCO 2 Level",0,1,.38f);
     b("hardSync","VCO 2 Hard Sync",false); f("crossMod","VCO Cross Modulation",0,800,0,.1f);
-    f("cutoff","Filter Cutoff",30,18000,1800,1,cutoffSkew()); f("resonance","Filter Resonance",.1f,18,.8f,.01f); f("filterContour","Filter Contour",0,1,.55f);
+    f("cutoff","Filter Cutoff",30,18000,1800,1,1200); f("resonance","Filter Resonance",.1f,18,.8f,.01f); f("filterContour","Filter Contour",0,1,.55f);
     f("filterAttack","Filter Envelope Attack",.005f,4,.025f,.001f); f("filterDecay","Filter Envelope Decay",.005f,5,.42f,.001f); f("filterSustain","Filter Envelope Sustain",0,1,.32f); f("filterRelease","Filter Envelope Release",.005f,6,.38f,.001f);
     f("ampAttack","Amp Envelope Attack",.005f,4,.015f,.001f); f("ampDecay","Amp Envelope Decay",.005f,5,.25f,.001f); f("ampSustain","Amp Envelope Sustain",0,1,.78f); f("ampRelease","Amp Envelope Release",.005f,6,.32f,.001f);
     c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1);
@@ -126,8 +128,17 @@ void WebPlaySynthAudioProcessor::startNote(int n,float vel,const Parameters& p)
 void WebPlaySynthAudioProcessor::stopNote(int n) { for(auto& v:voices) if(v.active&&v.note==n) v.stop(); }
 float WebPlaySynthAudioProcessor::polyBlep(double t,double dt)
 {
-    if(dt<=0) return 0; if(t<dt) { const auto x=t/dt; return static_cast<float>(x+x-x*x-1); }
-    if(t>1-dt) { const auto x=(t-1)/dt; return static_cast<float>(x*x+x+x+1); } return 0;
+    if (dt <= 0)
+        return 0;
+    if (t < dt) {
+        const auto x = t / dt;
+        return static_cast<float>(x + x - x * x - 1);
+    }
+    if (t > 1 - dt) {
+        const auto x = (t - 1) / dt;
+        return static_cast<float>(x * x + x + x + 1);
+    }
+    return 0;
 }
 float WebPlaySynthAudioProcessor::waveformSample(double phase,int wave)
 {
