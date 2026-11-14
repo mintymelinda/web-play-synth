@@ -283,18 +283,19 @@ export class SynthEngine {
     const now = this.context.currentTime;
     const { oscillator1, oscillator2, lfo, filter } = this.settings;
     const noteFrequency = voice.pitchFrequency ?? 440 * 2 ** ((voice.note - 69) / 12);
+    const pitchSmoothing = this.settings.glide.enabled ? Math.max(0.005, this.settings.glide.time / 3) : 0.015;
     const baseFrequency1 = noteFrequency * 2 ** ((oscillator1.octave * 12 + oscillator1.tune) / 12);
     const baseFrequency2 = noteFrequency * 2 ** ((oscillator2.octave * 12 + oscillator2.tune) / 12);
     const syncRatio = baseFrequency2 / baseFrequency1;
 
     voice.oscillators[0].type = oscillator1.waveform;
-    voice.oscillators[0].frequency.setTargetAtTime(baseFrequency1, now, 0.015);
+    voice.oscillators[0].frequency.setTargetAtTime(baseFrequency1, now, pitchSmoothing);
     if (oscillator2.hardSync) {
       voice.oscillators[1].setPeriodicWave(this.getHardSyncWave(syncRatio));
       voice.oscillators[1].frequency.setTargetAtTime(baseFrequency1, now, 0.015);
     } else {
       voice.oscillators[1].type = oscillator2.waveform;
-      voice.oscillators[1].frequency.setTargetAtTime(baseFrequency2, now, 0.015);
+      voice.oscillators[1].frequency.setTargetAtTime(baseFrequency2, now, pitchSmoothing);
     }
 
     const configs = [oscillator1, oscillator2];
