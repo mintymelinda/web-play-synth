@@ -425,6 +425,7 @@ export default function App() {
       silentOutput.connect(context.destination);
       await context.resume();
       await engine.current.start();
+      setPowered(true);
       microphoneVoiceNote.current += 1;
       engine.current.noteOn(microphoneVoiceNote.current, 0, 440);
       microphoneVoiceStarted.current = true;
@@ -442,33 +443,33 @@ export default function App() {
           lastAnalysis = time;
           analyser.getFloatTimeDomainData(samples);
           const frequency = detectFundamental(samples, context.sampleRate);
-        if (frequency !== null) {
-          silenceSince = 0;
-          if (Math.abs(frequency - lastFrequency) > 0.8) {
-            engine.current.setVoicePitch(microphoneVoiceNote.current, frequency);
-            lastFrequency = frequency;
-          }
-          if (!gateOpen) {
-            engine.current.setVoiceGate(microphoneVoiceNote.current, true);
-            gateOpen = true;
-          }
-          if (time - lastUiUpdate > 120) {
-            const named = pitchName(frequency);
-            setMicrophonePitch({ frequency, ...named });
-            setMicrophoneStatus("PITCH TRACKING");
-            lastUiUpdate = time;
-          }
-        } else {
-          if (!silenceSince) silenceSince = time;
-          if (time - silenceSince > 140 && gateOpen) {
-            engine.current.setVoiceGate(microphoneVoiceNote.current, false);
-            gateOpen = false;
-          }
-          if (time - lastUiUpdate > 180) {
-            setMicrophonePitch(null);
-            setMicrophoneStatus("LISTENING · HUM OR SING A NOTE");
-            lastUiUpdate = time;
-          }
+          if (frequency !== null) {
+            silenceSince = 0;
+            if (Math.abs(frequency - lastFrequency) > 0.8) {
+              engine.current.setVoicePitch(microphoneVoiceNote.current, frequency);
+              lastFrequency = frequency;
+            }
+            if (!gateOpen) {
+              engine.current.setVoiceGate(microphoneVoiceNote.current, true);
+              gateOpen = true;
+            }
+            if (time - lastUiUpdate > 120) {
+              const named = pitchName(frequency);
+              setMicrophonePitch({ frequency, ...named });
+              setMicrophoneStatus("PITCH TRACKING");
+              lastUiUpdate = time;
+            }
+          } else {
+            if (!silenceSince) silenceSince = time;
+            if (time - silenceSince > 140 && gateOpen) {
+              engine.current.setVoiceGate(microphoneVoiceNote.current, false);
+              gateOpen = false;
+            }
+            if (time - lastUiUpdate > 180) {
+              setMicrophonePitch(null);
+              setMicrophoneStatus("LISTENING · HUM OR SING A NOTE");
+              lastUiUpdate = time;
+            }
           }
         }
         microphoneFrame.current = requestAnimationFrame(tick);
