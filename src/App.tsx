@@ -11,17 +11,73 @@ const initial: SynthSettings = {
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
+  glide: { enabled: false, time: 0.18 },
 };
 
-const notes = [
-  { key: "A", note: 60, label: "C" }, { key: "W", note: 61, label: "C♯", black: true },
-  { key: "S", note: 62, label: "D" }, { key: "E", note: 63, label: "D♯", black: true },
-  { key: "D", note: 64, label: "E" }, { key: "F", note: 65, label: "F" },
-  { key: "T", note: 66, label: "F♯", black: true }, { key: "G", note: 67, label: "G" },
-  { key: "Y", note: 68, label: "G♯", black: true }, { key: "H", note: 69, label: "A" },
-  { key: "U", note: 70, label: "A♯", black: true }, { key: "J", note: 71, label: "B" },
-  { key: "K", note: 72, label: "C" },
-];
+const computerKeys = ["A", "W", "S", "E", "D", "F", "T", "G", "Y", "H", "U", "J", "K"];
+const noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const blackSemitones = new Set([1, 3, 6, 8, 10]);
+const notes = Array.from({ length: 25 }, (_, index) => ({
+  key: computerKeys[index] ?? "",
+  note: 60 + index,
+  label: noteNames[index % 12],
+  black: blackSemitones.has(index % 12),
+}));
+
+
+const microphoneVoiceNoteStart = 127;
+
+function detectFundamental(buffer: Float32Array, sampleRate: number): number | null {
+  let rms = 0;
+  for (let index = 0; index < buffer.length; index += 1) rms += buffer[index] * buffer[index];
+  rms = Math.sqrt(rms / buffer.length);
+  if (rms < 0.012) return null;
+
+  const minTau = Math.max(2, Math.floor(sampleRate / 1000));
+  const maxTau = Math.min(Math.floor(sampleRate / 55), Math.floor(buffer.length / 2));
+  const difference = new Float32Array(maxTau + 1);
+  for (let tau = minTau; tau <= maxTau; tau += 1) {
+    let sum = 0;
+    for (let index = 0; index < buffer.length - maxTau; index += 1) {
+      const delta = buffer[index] - buffer[index + tau];
+      sum += delta * delta;
+    }
+    difference[tau] = sum;
+  }
+
+  let runningSum = 0;
+  for (let tau = minTau; tau <= maxTau; tau += 1) {
+    runningSum += difference[tau];
+    difference[tau] = runningSum > 0 ? difference[tau] * (tau - minTau + 1) / runningSum : 1;
+  }
+
+  let selectedTau = -1;
+  for (let tau = minTau; tau <= maxTau; tau += 1) {
+    if (difference[tau] < 0.14) {
+      while (tau + 1 <= maxTau && difference[tau + 1] < difference[tau]) tau += 1;
+      selectedTau = tau;
+      break;
+    }
+  }
+  if (selectedTau < 0) return null;
+
+  const left = difference[selectedTau - 1] ?? difference[selectedTau];
+  const center = difference[selectedTau];
+  const right = difference[selectedTau + 1] ?? center;
+  const denominator = 2 * (2 * center - right - left);
+  const correction = denominator !== 0 ? (right - left) / denominator : 0;
+  const refinedTau = selectedTau + correction;
+  const frequency = sampleRate / refinedTau;
+  return frequency >= 55 && frequency <= 1000 ? frequency : null;
+}
+
+function pitchName(frequency: number) {
+  const midi = 69 + 12 * Math.log2(frequency / 440);
+  const rounded = Math.round(midi);
+  const cents = Math.round((midi - rounded) * 100);
+  const names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  return { note: `${names[(rounded % 12 + 12) % 12]}${Math.floor(rounded / 12) - 1}`, cents };
+}
 
 type MidiInputPort = {
   id: string;
@@ -141,6 +197,14 @@ export default function App() {
   const midiCcHandler = useRef<(cc: number, value: number) => void>(() => undefined);
   const sourceNotes = useRef(new Map<string, { note: number; displayNote: number }>());
   const midiAccess = useRef<MidiAccessLike | null>(null);
+  const [microphoneActive, setMicrophoneActive] = useState(false);
+  const [microphoneStatus, setMicrophoneStatus] = useState("MICROPHONE OFF");
+  const [microphonePitch, setMicrophonePitch] = useState<{ frequency: number; note: string; cents: number } | null>(null);
+  const microphoneStream = useRef<MediaStream | null>(null);
+  const microphoneContext = useRef<AudioContext | null>(null);
+  const microphoneFrame = useRef<number | null>(null);
+  const microphoneVoiceStarted = useRef(false);
+  const microphoneVoiceNote = useRef(microphoneVoiceNoteStart);
 
   useEffect(() => { engine.current.update(settings); }, [settings]);
   const update = useCallback(<K extends keyof SynthSettings,>(key: K, value: SynthSettings[K]) => {
@@ -217,7 +281,7 @@ export default function App() {
   const release = useCallback((note: number) => releaseSource(`piano:${note}`), [releaseSource]);
 
   useEffect(() => {
-    const keyMap = new Map(notes.map((item) => [item.key.toLowerCase(), item.note]));
+    const keyMap = new Map(notes.filter((item) => item.key).map((item) => [item.key.toLowerCase(), item.note]));
     const down = (event: KeyboardEvent) => {
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
@@ -322,6 +386,111 @@ export default function App() {
       setMidiConnected(false);
     }
   };
+  const stopMicrophone = useCallback(() => {
+    if (microphoneFrame.current !== null) cancelAnimationFrame(microphoneFrame.current);
+    microphoneFrame.current = null;
+    microphoneStream.current?.getTracks().forEach((track) => track.stop());
+    microphoneStream.current = null;
+    void microphoneContext.current?.close();
+    microphoneContext.current = null;
+    if (microphoneVoiceStarted.current) {
+      engine.current.noteOff(microphoneVoiceNote.current);
+      microphoneVoiceStarted.current = false;
+    }
+    setMicrophoneActive(false);
+    setMicrophonePitch(null);
+    setMicrophoneStatus("MICROPHONE OFF");
+  }, []);
+
+  const startMicrophone = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicrophoneStatus("MICROPHONE INPUT REQUIRES HTTPS OR LOCALHOST");
+      return;
+    }
+    setMicrophoneStatus("REQUESTING MICROPHONE PERMISSION…");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      microphoneStream.current = stream;
+      const context = new AudioContext();
+      microphoneContext.current = context;
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0;
+      const input = context.createMediaStreamSource(stream);
+      input.connect(analyser);
+      const silentOutput = context.createGain();
+      silentOutput.gain.value = 0;
+      analyser.connect(silentOutput);
+      silentOutput.connect(context.destination);
+      await context.resume();
+      await engine.current.start();
+      setPowered(true);
+      microphoneVoiceNote.current += 1;
+      engine.current.noteOn(microphoneVoiceNote.current, 0, 440);
+      microphoneVoiceStarted.current = true;
+      setMicrophoneActive(true);
+      setMicrophoneStatus("LISTENING · HUM OR SING A NOTE");
+
+      const samples = new Float32Array(analyser.fftSize);
+      let lastUiUpdate = 0;
+      let lastFrequency = 0;
+      let silenceSince = 0;
+      let lastAnalysis = 0;
+      let gateOpen = false;
+      const tick = (time: number) => {
+        if (time - lastAnalysis >= 35) {
+          lastAnalysis = time;
+          analyser.getFloatTimeDomainData(samples);
+          const frequency = detectFundamental(samples, context.sampleRate);
+          if (frequency !== null) {
+            silenceSince = 0;
+            if (Math.abs(frequency - lastFrequency) > 0.8) {
+              engine.current.setVoicePitch(microphoneVoiceNote.current, frequency);
+              lastFrequency = frequency;
+            }
+            if (!gateOpen) {
+              engine.current.setVoiceGate(microphoneVoiceNote.current, true);
+              gateOpen = true;
+            }
+            if (time - lastUiUpdate > 120) {
+              const named = pitchName(frequency);
+              setMicrophonePitch({ frequency, ...named });
+              setMicrophoneStatus("PITCH TRACKING");
+              lastUiUpdate = time;
+            }
+          } else {
+            if (!silenceSince) silenceSince = time;
+            if (time - silenceSince > 140 && gateOpen) {
+              engine.current.setVoiceGate(microphoneVoiceNote.current, false);
+              gateOpen = false;
+            }
+            if (time - lastUiUpdate > 180) {
+              setMicrophonePitch(null);
+              setMicrophoneStatus("LISTENING · HUM OR SING A NOTE");
+              lastUiUpdate = time;
+            }
+          }
+        }
+        microphoneFrame.current = requestAnimationFrame(tick);
+      };
+      microphoneFrame.current = requestAnimationFrame(tick);
+    } catch (error) {
+      console.error("Unable to start microphone pitch input", error);
+      microphoneStream.current?.getTracks().forEach((track) => track.stop());
+      microphoneStream.current = null;
+      void microphoneContext.current?.close();
+      microphoneContext.current = null;
+      if (microphoneVoiceStarted.current) engine.current.noteOff(microphoneVoiceNote.current);
+      microphoneVoiceStarted.current = false;
+      setMicrophoneActive(false);
+      setMicrophoneStatus(error instanceof DOMException && error.name === "NotAllowedError"
+        ? "MICROPHONE PERMISSION DENIED"
+        : "COULD NOT START MICROPHONE INPUT");
+    }
+  };
+
   const disconnectMidi = () => {
     const access = midiAccess.current;
     if (access) {
@@ -346,6 +515,14 @@ export default function App() {
     }
   }, []);
   const activeCount = held.length;
+  useEffect(() => () => {
+    if (microphoneFrame.current !== null) cancelAnimationFrame(microphoneFrame.current);
+    microphoneStream.current?.getTracks().forEach((track) => track.stop());
+    if (microphoneVoiceStarted.current) engine.current.noteOff(microphoneVoiceNote.current);
+    microphoneVoiceStarted.current = false;
+    void microphoneContext.current?.close();
+  }, []);
+
   const frequencyLabel = useMemo(() => `${Math.round(settings.filter.cutoff).toLocaleString()} Hz`, [settings.filter.cutoff]);
 
   return <main className="app-shell">
@@ -518,8 +695,17 @@ export default function App() {
         </div>}
         {!((navigator as MidiNavigator).requestMIDIAccess) && <span className="midi-unsupported">Web MIDI is unavailable in this browser. Try a Chromium-based browser over HTTPS or localhost.</span>}
       </div>
-      <div className="piano">{notes.filter((n) => !n.black).map((note) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span><small>{note.key}</small></button>{notes.find((n) => n.note === note.note + 1)?.black && <button className={`black-key ${held.includes(note.note + 1) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note + 1); }} onPointerUp={() => release(note.note + 1)} onPointerLeave={() => held.includes(note.note + 1) && release(note.note + 1)}><span>{notes.find((n) => n.note === note.note + 1)!.key}</span></button>}</div>)}</div>
-      <div className="keyboard-footer"><span>COMPUTER KEYBOARD ACTIVE · A–K / W E T Y U</span><span><Volume2 size={14} /> {powered ? "AUDIO ACTIVE" : "PRESS POWER TO ENABLE AUDIO"}</span></div>
+      <div className="glide-panel">
+        <div className="glide-info"><span className="eyebrow">PITCH TRANSITION</span><strong>GLOBAL GLIDE</strong><small>Slides between played notes from keyboard and MIDI</small></div>
+        <button type="button" className={`glide-toggle ${settings.glide.enabled ? "is-active" : ""}`} aria-pressed={settings.glide.enabled} onClick={() => update("glide", { ...settings.glide, enabled: !settings.glide.enabled })}><span className="sync-indicator" /><b>{settings.glide.enabled ? "ON" : "OFF"}</b></button>
+        <div className="glide-amount"><Knob label="GLIDE TIME" value={settings.glide.time} min={0.01} max={2} step={0.01} display={(n) => `${n.toFixed(2)}s`} onChange={(n) => update("glide", { ...settings.glide, time: n })} /></div>
+      </div>
+      <div className={`microphone-panel ${microphoneActive ? "is-active" : ""}`}>
+        <div className="microphone-info"><span className="eyebrow">ALTERNATE PITCH INPUT</span><strong>MICROPHONE → VCO</strong><small>{microphonePitch ? `${microphonePitch.note} · ${microphonePitch.frequency.toFixed(1)} HZ · ${microphonePitch.cents > 0 ? "+" : ""}${microphonePitch.cents}¢` : microphoneStatus}</small></div>
+        <button className="microphone-button" onClick={microphoneActive ? stopMicrophone : startMicrophone}>{microphoneActive ? "STOP MIC" : "ENABLE MIC"}</button>
+      </div>
+      <div className="piano">{notes.filter((n) => !n.black).map((note) => <div className="white-key-wrap" key={note.note}><button className={`white-key ${held.includes(note.note) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note); }} onPointerUp={() => release(note.note)} onPointerLeave={() => held.includes(note.note) && release(note.note)}><span>{note.label}</span>{note.key && <small>{note.key}</small>}</button>{notes.find((n) => n.note === note.note + 1)?.black && <button className={`black-key ${held.includes(note.note + 1) ? "pressed" : ""}`} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); void play(note.note + 1); }} onPointerUp={() => release(note.note + 1)} onPointerLeave={() => held.includes(note.note + 1) && release(note.note + 1)}><span>{notes.find((n) => n.note === note.note + 1)!.key}</span></button>}</div>)}</div>
+      <div className="keyboard-footer"><span>COMPUTER KEYS · FIRST OCTAVE A–K / W E T Y U · TWO-OCTAVE TOUCH KEYBOARD</span><span><Volume2 size={14} /> {powered ? "AUDIO ACTIVE" : "PRESS POWER TO ENABLE AUDIO"}</span></div>
     </section>
     <footer><span>WEB PLAY SYNTH <b>001</b></span><span>LOCAL AUDIO ENGINE · NO SERVER-SIDE AUDIO</span><span>BUILT FOR EXPERIMENTATION <AudioLines size={13} /></span></footer>
   </main>;

@@ -142,3 +142,45 @@
  .cc-map-assign label{align-items:flex-start;flex-direction:column}
  .cc-map-list{grid-template-columns:1fr}
 }
+
+
+/* Microphone pitch input and compact two-octave performance keyboard */
+.microphone-panel{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 15px;padding:11px 13px;border:1px solid #343d40;border-radius:4px;background:#14191b}
+.microphone-panel.is-active{border-color:#4b8278;background:#172522}
+.microphone-info{display:grid;gap:4px;min-width:0}
+.microphone-info strong{font:10px var(--mono);letter-spacing:.8px;color:#dce2dd}
+.microphone-info small{font:8px var(--mono);color:#82908f;overflow-wrap:anywhere}
+.microphone-panel.is-active .microphone-info small{color:var(--cyan)}
+.microphone-button{flex:none;padding:9px 12px;border:1px solid #4a6f68;border-radius:3px;background:#1a2926;color:#a9e8dc;font:8px var(--mono);letter-spacing:.8px;cursor:pointer}
+.microphone-button:hover{border-color:var(--cyan);background:#203631}
+.microphone-panel.is-active .microphone-button{border-color:#806ab0;background:#252033;color:#d0bdfb}
+.piano{height:132px}
+.white-key span{font-size:9px}
+.white-key small{font-size:7px}
+.black-key{right:-27%;width:54%;height:59%}
+.black-key span{font-size:7px}
+@media(max-width:650px){
+ .microphone-panel{align-items:flex-start}
+ .microphone-info small{font-size:7px}
+ .piano{height:112px}
+ .black-key{right:-30%;width:60%;height:58%}
+ .white-key{padding-bottom:7px}
+ .white-key span{font-size:8px}
+}
+
+/* Global portamento control */
+.glide-panel{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:18px;margin:0 0 12px;padding:12px 14px;border:1px solid #343d40;border-radius:4px;background:#14191b}
+.glide-info{display:grid;gap:4px}
+.glide-info strong{font:10px var(--mono);letter-spacing:.8px;color:#dce2dd}
+.glide-info small{font:8px var(--mono);color:#82908f}
+.glide-toggle{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid #485254;border-radius:3px;background:#202629;color:#9aa5a3;font:8px var(--mono);letter-spacing:.8px;cursor:pointer}
+.glide-toggle.is-active{border-color:#4f8d83;background:#1b302c;color:var(--cyan)}
+.glide-toggle .sync-indicator{width:8px;height:8px}
+.glide-toggle.is-active .sync-indicator{border-color:var(--cyan);background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.glide-amount .knob-control{display:grid;grid-template-columns:auto 38px auto;align-items:center;gap:8px}
+.glide-amount .knob{width:38px;height:38px}
+.glide-amount .knob-face{inset:4px}
+.glide-amount .knob-indicator{transform-origin:1px 15px}
+.glide-amount .knob-label{font-size:7px}
+.glide-amount output{font-size:8px}
+@media(max-width:650px){.glide-panel{grid-template-columns:1fr auto;gap:10px}.glide-info small{font-size:7px}.glide-amount{grid-column:1/-1}.glide-amount .knob-control{grid-template-columns:auto 38px auto;justify-content:start}}

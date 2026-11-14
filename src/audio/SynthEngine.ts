@@ -15,6 +15,7 @@ export interface SynthSettings {
   filterEnvelope: Envelope;
   ampEnvelope: Envelope;
   master: number;
+  glide: { enabled: boolean; time: number };
   routing: { vco1: boolean; vco2: boolean; filterEnv: boolean; ampEnv: boolean };
 }
 
@@ -29,6 +30,7 @@ interface Voice {
   amp: GainNode;
   voiceGain: GainNode;
   note: number;
+  pitchFrequency: number | null;
   released: boolean;
   connected: [boolean, boolean];
 }
@@ -41,6 +43,7 @@ const DEFAULT_SETTINGS: SynthSettings = {
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
+  glide: { enabled: false, time: 0.18 },
   routing: { vco1: true, vco2: true, filterEnv: true, ampEnv: true },
 };
 
@@ -80,6 +83,7 @@ export class SynthEngine {
   private voices = new Map<number, Voice>();
   private syncWaves = new Map<number, PeriodicWave>();
   private settings: SynthSettings = structuredClone(DEFAULT_SETTINGS);
+  private lastPlayedFrequency: number | null = null;
 
   get isReady() {
     return this.context !== null && this.context.state === "running";
@@ -103,7 +107,7 @@ export class SynthEngine {
     for (const voice of this.voices.values()) this.updateVoice(voice);
   }
 
-  noteOn(note: number, velocity = 0.82) {
+  noteOn(note: number, velocity = 0.82, pitchFrequency: number | null = null) {
     if (!this.context || !this.master || this.voices.has(note)) return;
     const context = this.context;
     const now = context.currentTime;
@@ -149,11 +153,35 @@ export class SynthEngine {
       amp,
       voiceGain,
       note,
+      pitchFrequency,
       released: false,
       connected: [false, false],
     };
     this.voices.set(note, voice);
     this.updateVoice(voice);
+
+    // Portamento applies to keyboard/MIDI note changes, not the continuously tracked mic pitch.
+    if (pitchFrequency === null) {
+      const targetFrequency = 440 * 2 ** ((note - 69) / 12);
+      const glideFrom = this.lastPlayedFrequency;
+      this.lastPlayedFrequency = targetFrequency;
+      if (this.settings.glide.enabled && glideFrom !== null && this.settings.glide.time > 0) {
+        const glideEnd = now + this.settings.glide.time;
+        const offsets = [
+          2 ** ((this.settings.oscillator1.octave * 12 + this.settings.oscillator1.tune) / 12),
+          this.settings.oscillator2.hardSync
+            ? 2 ** ((this.settings.oscillator1.octave * 12 + this.settings.oscillator1.tune) / 12)
+            : 2 ** ((this.settings.oscillator2.octave * 12 + this.settings.oscillator2.tune) / 12),
+        ];
+        voice.oscillators.forEach((oscillator, index) => {
+          const target = targetFrequency * offsets[index];
+          const start = glideFrom * offsets[index];
+          oscillator.frequency.cancelScheduledValues(now);
+          oscillator.frequency.setValueAtTime(Math.max(0.01, start), now);
+          oscillator.frequency.exponentialRampToValueAtTime(Math.max(0.01, target), glideEnd);
+        });
+      }
+    }
 
     const ampEnv = this.settings.ampEnvelope;
     const filterEnv = this.settings.filterEnvelope;
@@ -177,6 +205,29 @@ export class SynthEngine {
 
     for (const oscillator of voice.oscillators) oscillator.start(now);
     lfo.start(now);
+  }
+
+  setVoicePitch(note: number, frequency: number) {
+    const voice = this.voices.get(note);
+    if (!voice || voice.released || !Number.isFinite(frequency) || frequency <= 0) return;
+    voice.pitchFrequency = clamp(frequency, 20, 20000);
+    this.updateVoice(voice);
+  }
+
+  setVoiceGate(note: number, open: boolean, velocity = 0.82) {
+    const voice = this.voices.get(note);
+    if (!voice || voice.released || !this.context) return;
+    const now = this.context.currentTime;
+    voice.amp.gain.cancelScheduledValues(now);
+    voice.amp.gain.setValueAtTime(voice.amp.gain.value, now);
+    if (open && this.settings.routing.ampEnv) {
+      const envelope = this.settings.ampEnvelope;
+      voice.amp.gain.linearRampToValueAtTime(velocity, now + envelope.attack);
+      voice.amp.gain.linearRampToValueAtTime(velocity * envelope.sustain, now + envelope.attack + envelope.decay);
+    } else {
+      const release = this.settings.routing.ampEnv ? this.settings.ampEnvelope.release : 0.018;
+      voice.amp.gain.linearRampToValueAtTime(open ? velocity : 0, now + (open ? 0.025 : release));
+    }
   }
 
   noteOff(note: number) {
@@ -233,18 +284,20 @@ export class SynthEngine {
     if (!this.context) return;
     const now = this.context.currentTime;
     const { oscillator1, oscillator2, lfo, filter } = this.settings;
-    const baseFrequency1 = 440 * 2 ** ((voice.note - 69 + oscillator1.octave * 12 + oscillator1.tune) / 12);
-    const baseFrequency2 = 440 * 2 ** ((voice.note - 69 + oscillator2.octave * 12 + oscillator2.tune) / 12);
+    const noteFrequency = voice.pitchFrequency ?? 440 * 2 ** ((voice.note - 69) / 12);
+    const pitchSmoothing = this.settings.glide.enabled ? Math.max(0.005, this.settings.glide.time / 3) : 0.015;
+    const baseFrequency1 = noteFrequency * 2 ** ((oscillator1.octave * 12 + oscillator1.tune) / 12);
+    const baseFrequency2 = noteFrequency * 2 ** ((oscillator2.octave * 12 + oscillator2.tune) / 12);
     const syncRatio = baseFrequency2 / baseFrequency1;
 
     voice.oscillators[0].type = oscillator1.waveform;
-    voice.oscillators[0].frequency.setTargetAtTime(baseFrequency1, now, 0.015);
+    voice.oscillators[0].frequency.setTargetAtTime(baseFrequency1, now, pitchSmoothing);
     if (oscillator2.hardSync) {
       voice.oscillators[1].setPeriodicWave(this.getHardSyncWave(syncRatio));
       voice.oscillators[1].frequency.setTargetAtTime(baseFrequency1, now, 0.015);
     } else {
       voice.oscillators[1].type = oscillator2.waveform;
-      voice.oscillators[1].frequency.setTargetAtTime(baseFrequency2, now, 0.015);
+      voice.oscillators[1].frequency.setTargetAtTime(baseFrequency2, now, pitchSmoothing);
     }
 
     const configs = [oscillator1, oscillator2];
