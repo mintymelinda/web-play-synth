@@ -32,7 +32,7 @@ The first build fetches JUCE 8.0.6 through CMake FetchContent. The framework ver
 - Audio routing switches and master level
 - Host-automatable parameters and DAW session state persistence
 
-The initial editor is intentionally minimal while the native DSP foundation is validated. A purpose-built interface matching the browser instrument follows.
+The native editor provides grouped oscillator, filter, envelope, LFO, output, glide, and routing controls. Parameters remain host-automatable and use JUCE attachments so host automation and the editor stay synchronized.
 
 ## Licensing
 

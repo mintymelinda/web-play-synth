@@ -18,7 +18,7 @@ juce_add_plugin(WebPlaySynth
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 juce_generate_juce_header(WebPlaySynth)
-target_sources(WebPlaySynth PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h)
+target_sources(WebPlaySynth PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
 target_compile_features(WebPlaySynth PRIVATE cxx_std_17)
 target_compile_definitions(WebPlaySynth PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
