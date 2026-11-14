@@ -20,7 +20,8 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
 }
 
 WebPlaySynthAudioProcessor::WebPlaySynthAudioProcessor()
-    : AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),
+    : AudioProcessor(BusesProperties().withInput("Pitch Input",juce::AudioChannelSet::mono(),false)
+          .withOutput("Output",juce::AudioChannelSet::stereo(),true)),
       parameters(*this,nullptr,"SYNTH_STATE",createParameterLayout())
 {
     for (auto& assignment : midiCcToParameter)
@@ -104,7 +105,17 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 void WebPlaySynthAudioProcessor::releaseResources() { for(auto& v:voices) { v.active=false; v.keyDown=false; } }
 bool WebPlaySynthAudioProcessor::isBusesLayoutSupported(const BusesLayout& l) const
 {
-    const auto out=l.getMainOutputChannelSet(); return out==juce::AudioChannelSet::mono() || out==juce::AudioChannelSet::stereo();
+    if (l.inputBuses.size() != 1 || l.outputBuses.size() != 1)
+        return false;
+
+    const auto input = l.getChannelSet(true, 0);
+    const auto output = l.getMainOutputChannelSet();
+    const auto inputDisabled = input == juce::AudioChannelSet::disabled();
+    const auto inputMono = input == juce::AudioChannelSet::mono();
+    const auto outputSupported = output == juce::AudioChannelSet::mono()
+        || output == juce::AudioChannelSet::stereo();
+
+    return (inputDisabled || inputMono) && outputSupported;
 }
 WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameters() const
 {
@@ -121,9 +132,38 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
 }
 void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& midi)
 {
-    juce::ScopedNoDenormals guard; b.clear(); const auto p=readParameters(); int pos=0;
-    for(const auto meta:midi) { const auto at=juce::jlimit(pos,b.getNumSamples(),meta.samplePosition); renderRange(b,pos,at,p); handleMidiMessage(meta.getMessage(),p); pos=at; }
-    renderRange(b,pos,b.getNumSamples(),p); b.applyGain(p.master);
+    juce::ScopedNoDenormals guard;
+
+    // Measure the optional input before touching the output bus. JUCE may map
+    // input and output channels onto the same processBlock buffer memory.
+    float inputRms = 0.0f;
+    if (getChannelCountOfBus(true, 0) > 0) {
+        auto input = getBusBuffer(b, true, 0);
+        if (input.getNumChannels() > 0 && input.getNumSamples() > 0) {
+            const auto* samples = input.getReadPointer(0);
+            double sumSquares = 0.0;
+            for (int sample = 0; sample < input.getNumSamples(); ++sample)
+                sumSquares += static_cast<double>(samples[sample]) * samples[sample];
+            inputRms = static_cast<float>(std::sqrt(sumSquares / input.getNumSamples()));
+        }
+    }
+    pitchInputRms.store(inputRms, std::memory_order_relaxed);
+
+    // Only clear/write the output bus. Input-only channels in JUCE's
+    // processBlock buffer may be read-only and must never be modified.
+    auto output = getBusBuffer(b, false, 0);
+    output.clear();
+
+    const auto p = readParameters();
+    int pos = 0;
+    for (const auto meta : midi) {
+        const auto at = juce::jlimit(pos, output.getNumSamples(), meta.samplePosition);
+        renderRange(output, pos, at, p);
+        handleMidiMessage(meta.getMessage(), p);
+        pos = at;
+    }
+    renderRange(output, pos, output.getNumSamples(), p);
+    output.applyGain(p.master);
 }
 void WebPlaySynthAudioProcessor::renderRange(juce::AudioBuffer<float>& b,int start,int end,const Parameters& p)
 {
