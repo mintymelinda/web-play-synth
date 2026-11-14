@@ -82,7 +82,7 @@ void WebPlaySynthAudioProcessorEditor::addKnob(const juce::String& id, const juc
     label->setText(name, juce::dontSendNotification);
     label->setJustificationType(juce::Justification::centred);
     label->setColour(juce::Label::textColourId, muted);
-    label->setFont(juce::Font(10.0f, juce::Font::bold));
+    label->setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     addAndMakeVisible(*label);
 
     auto slider = std::make_unique<juce::Slider>();
@@ -107,7 +107,7 @@ void WebPlaySynthAudioProcessorEditor::addChoice(const juce::String& id, const j
     label->setText(name, juce::dontSendNotification);
     label->setJustificationType(juce::Justification::centred);
     label->setColour(juce::Label::textColourId, muted);
-    label->setFont(juce::Font(10.0f, juce::Font::bold));
+    label->setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     addAndMakeVisible(*label);
 
     auto combo = std::make_unique<juce::ComboBox>();
@@ -163,13 +163,13 @@ void WebPlaySynthAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff10151d));
     g.setColour(text);
-    g.setFont(juce::Font(23.0f, juce::Font::bold));
+    g.setFont(juce::Font(juce::FontOptions(23.0f, juce::Font::bold)));
     g.drawText("WEB PLAY  SYNTH", 18, 8, 300, 30, juce::Justification::left);
     g.setColour(violet);
-    g.setFont(juce::Font(10.0f, juce::Font::bold));
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     g.drawText("DUAL VCO  /  NATIVE INSTRUMENT", 20, 37, 360, 16, juce::Justification::left);
     g.setColour(muted);
-    g.setFont(juce::Font(10.0f));
+    g.setFont(juce::Font(juce::FontOptions(10.0f)));
     g.drawText("HOST AUTOMATABLE  •  16 VOICE POLYPHONY", getWidth() - 310, 18, 290, 20, juce::Justification::right);
 }
 
