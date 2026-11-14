@@ -5,9 +5,27 @@ namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
 }
 
+const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
+{
+    static const juce::StringArray ids {
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
+        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+        "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+        "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "filterEnvEnabled", "ampEnvEnabled"
+    };
+    return ids;
+}
+
 WebPlaySynthAudioProcessor::WebPlaySynthAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),
-      parameters(*this,nullptr,"SYNTH_STATE",createParameterLayout()) {}
+      parameters(*this,nullptr,"SYNTH_STATE",createParameterLayout())
+{
+    for (auto& assignment : midiCcToParameter)
+        assignment.store(-1);
+}
 
 WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioProcessor::createParameterLayout()
 {
@@ -113,9 +131,69 @@ void WebPlaySynthAudioProcessor::renderRange(juce::AudioBuffer<float>& b,int sta
 }
 void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,const Parameters& p)
 {
+    if (m.isController()) {
+        const auto cc = m.getControllerNumber();
+        const auto learnTarget = midiCcLearnTarget.exchange(-1);
+        if (learnTarget >= 0 && learnTarget < midiCcParameterIds().size()) {
+            // Deterministic one-to-one mapping: a CC and a parameter can each
+            // participate in only one assignment.
+            for (auto& assignment : midiCcToParameter)
+                if (assignment.load() == learnTarget)
+                    assignment.store(-1);
+            midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
+
+            // The controller movement that completes learning should also
+            // establish the parameter's initial value. This avoids requiring
+            // a second physical movement before the newly learned control works.
+            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
+                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
+            return;
+        }
+
+        const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
+        if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size()) {
+            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[parameterIndex]))
+                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
+        }
+        return;
+    }
+
     if(m.isNoteOn()) startNote(m.getNoteNumber(),m.getFloatVelocity(),p);
     else if(m.isNoteOff()) stopNote(m.getNoteNumber());
     else if(m.isAllNotesOff()||m.isAllSoundOff()) for(auto& v:voices) v.stop();
+}
+
+void WebPlaySynthAudioProcessor::setMidiCcLearnTarget(const juce::String& parameterId)
+{
+    const auto index = midiCcParameterIds().indexOf(parameterId);
+    midiCcLearnTarget.store(index);
+}
+
+void WebPlaySynthAudioProcessor::clearMidiCcMapping(const juce::String& parameterId)
+{
+    const auto index = midiCcParameterIds().indexOf(parameterId);
+    if (index < 0)
+        return;
+
+    for (auto& assignment : midiCcToParameter)
+        if (assignment.load() == index)
+            assignment.store(-1);
+
+    if (midiCcLearnTarget.load() == index)
+        midiCcLearnTarget.store(-1);
+}
+
+juce::String WebPlaySynthAudioProcessor::getMidiCcMappingForParameter(const juce::String& parameterId) const
+{
+    const auto index = midiCcParameterIds().indexOf(parameterId);
+    if (index < 0)
+        return {};
+
+    for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc)
+        if (midiCcToParameter[static_cast<size_t>(cc)].load() == index)
+            return juce::String(cc);
+
+    return {};
 }
 WebPlaySynthAudioProcessor::Voice* WebPlaySynthAudioProcessor::findVoiceToStart()
 {
@@ -161,10 +239,50 @@ float WebPlaySynthAudioProcessor::oscillatorSample(double phase,double inc,int w
 juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return new WebPlaySynthAudioProcessorEditor(*this); }
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
-    if(auto xml=parameters.copyState().createXml()) copyXmlToBinary(*xml,dest);
+    if (auto xml = parameters.copyState().createXml()) {
+        for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc) {
+            const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
+            if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size())
+                xml->setAttribute("MIDI_CC_" + juce::String(cc), midiCcParameterIds()[parameterIndex]);
+        }
+        copyXmlToBinary(*xml, dest);
+    }
 }
-void WebPlaySynthAudioProcessor::setStateInformation(const void* data,int size)
+
+void WebPlaySynthAudioProcessor::setStateInformation(const void* data, int size)
 {
-    if(auto xml=getXmlFromBinary(data,size)) if(xml->hasTagName(parameters.state.getType())) parameters.replaceState(juce::ValueTree::fromXml(*xml));
+    if (auto xml = getXmlFromBinary(data, size)) {
+        if (!xml->hasTagName(parameters.state.getType()))
+            return;
+
+        for (auto& assignment : midiCcToParameter)
+            assignment.store(-1);
+        midiCcLearnTarget.store(-1);
+
+        // Store mappings as root attributes so they remain attached to the
+        // APVTS state across JUCE XML serialization and ValueTree restoration.
+        // Keep reading the earlier child-element representation for compatibility
+        // with states saved by pre-attribute builds.
+        for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc) {
+            const auto attribute = "MIDI_CC_" + juce::String(cc);
+            if (xml->hasAttribute(attribute)) {
+                const auto parameterIndex = midiCcParameterIds().indexOf(xml->getStringAttribute(attribute));
+                if (parameterIndex >= 0)
+                    midiCcToParameter[static_cast<size_t>(cc)].store(parameterIndex);
+            }
+        }
+
+        if (auto* mappings = xml->getChildByName("MIDI_CC_MAPPINGS")) {
+            for (auto* mapping = mappings->getFirstChildElement(); mapping != nullptr; mapping = mapping->getNextElement()) {
+                const auto cc = mapping->getIntAttribute("cc", -1);
+                const auto parameterIndex = midiCcParameterIds().indexOf(mapping->getStringAttribute("parameter"));
+                if (cc >= 0 && cc < static_cast<int>(midiCcToParameter.size()) && parameterIndex >= 0
+                    && midiCcToParameter[static_cast<size_t>(cc)].load() < 0)
+                    midiCcToParameter[static_cast<size_t>(cc)].store(parameterIndex);
+            }
+        }
+
+        parameters.replaceState(juce::ValueTree::fromXml(*xml));
+    }
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new WebPlaySynthAudioProcessor(); }
