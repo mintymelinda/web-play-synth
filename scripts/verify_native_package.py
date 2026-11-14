@@ -7,7 +7,6 @@ import argparse
 import os
 import struct
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -25,6 +24,8 @@ def verify_elf_x86_64(binary: Path) -> None:
     data = binary.read_bytes()[:20]
     if len(data) < 20 or data[:4] != b"\x7fELF":
         fail(f"{binary} is not an ELF executable")
+    if data[4] != 2:
+        fail(f"{binary} is not a 64-bit ELF executable")
     byte_order = "<" if data[5] == 1 else ">" if data[5] == 2 else None
     if byte_order is None:
         fail(f"{binary} has an invalid ELF byte order")
@@ -38,7 +39,7 @@ def verify_pe_x86_64(binary: Path) -> None:
     if len(data) < 0x40 or data[:2] != b"MZ":
         fail(f"{binary} is not a PE executable")
     pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
-    if data[pe_offset : pe_offset + 4] != b"PE\0\0":
+    if pe_offset + 6 > len(data) or data[pe_offset : pe_offset + 4] != b"PE\0\0":
         fail(f"{binary} has no valid PE signature")
     machine = struct.unpack_from("<H", data, pe_offset + 4)[0]
     if machine != 0x8664:
@@ -78,10 +79,8 @@ def locate_plugin_binary(bundle: Path, platform: str) -> Path:
     if platform == "linux-x86_64":
         candidates = list((contents / "x86_64-linux").glob("*.so"))
     elif platform == "windows-x86_64":
-        candidates = [
-            path for path in (contents / "x86_64-win").iterdir()
-            if path.is_file()
-        ] if (contents / "x86_64-win").is_dir() else []
+        architecture_dir = contents / "x86_64-win"
+        candidates = [path for path in architecture_dir.iterdir() if path.is_file()] if architecture_dir.is_dir() else []
     else:
         macos_dir = contents / "MacOS"
         candidates = [path for path in macos_dir.iterdir() if path.is_file()] if macos_dir.is_dir() else []
