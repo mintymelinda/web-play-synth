@@ -141,6 +141,12 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
                 if (assignment.load() == learnTarget)
                     assignment.store(-1);
             midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
+
+            // The controller movement that completes learning should also
+            // establish the parameter's initial value. This avoids requiring
+            // a second physical movement before the newly learned control works.
+            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
+                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
             return;
         }
 
