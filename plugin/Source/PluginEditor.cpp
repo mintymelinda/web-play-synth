@@ -12,7 +12,6 @@ const auto muted = juce::Colour(0xff8794a6);
 WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthAudioProcessor& p)
     : AudioProcessorEditor(p), processor(p), state(p.parameters)
 {
-    setSize(980, 960);
     setResizable(true, true);
     setResizeLimits(760, 700, 1440, 1200);
 
@@ -137,6 +136,9 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     midiCcStatus->setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(*midiCcStatus);
     startTimerHz(8);
+
+    // Build all child components before sizing: setSize() invokes resized().
+    setSize(980, 960);
 }
 
 void WebPlaySynthAudioProcessorEditor::addGroup(const juce::String& title, std::vector<Slot>&)
