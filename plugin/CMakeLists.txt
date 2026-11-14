@@ -23,3 +23,15 @@ target_compile_features(WebPlaySynth PRIVATE cxx_std_17)
 target_compile_definitions(WebPlaySynth PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(WebPlaySynthSmokeTest tests/PluginSmokeTest.cpp)
+    target_include_directories(WebPlaySynthSmokeTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthSmokeTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
+endif()

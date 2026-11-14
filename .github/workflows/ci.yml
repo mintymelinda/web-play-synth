@@ -38,7 +38,19 @@ jobs:
             libxrandr-dev \
             libxcursor-dev \
             libgl1-mesa-dev
-      - name: Configure native plugin
-        run: cmake -S plugin -B build/plugin -DCMAKE_BUILD_TYPE=Release
-      - name: Build VST3
-        run: cmake --build build/plugin --config Release --target WebPlaySynth_VST3 --parallel 2
+      - name: Configure native plugin and smoke tests
+        run: cmake -S plugin -B build/plugin -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build VST3, Standalone, and smoke test
+        run: cmake --build build/plugin --config Release --parallel 2
+      - name: Run native audio and MIDI smoke test
+        run: ctest --test-dir build/plugin -C Release --output-on-failure
+      - name: Package Linux plugin formats
+        run: |
+          tar -czf web-play-synth-linux-x86_64.tar.gz \
+            -C build/plugin/WebPlaySynth_artefacts/Release VST3 Standalone
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-play-synth-linux-x86_64
+          path: web-play-synth-linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 14
