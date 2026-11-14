@@ -11,6 +11,7 @@ const initial: SynthSettings = {
   filterEnvelope: { attack: 0.025, decay: 0.42, sustain: 0.32, release: 0.38 },
   ampEnvelope: { attack: 0.015, decay: 0.25, sustain: 0.78, release: 0.32 },
   master: 0.72,
+  glide: { enabled: false, time: 0.18 },
 };
 
 const computerKeys = ["A", "W", "S", "E", "D", "F", "T", "G", "Y", "H", "U", "J", "K"];
@@ -693,6 +694,11 @@ export default function App() {
           </div>)}</div>}
         </div>}
         {!((navigator as MidiNavigator).requestMIDIAccess) && <span className="midi-unsupported">Web MIDI is unavailable in this browser. Try a Chromium-based browser over HTTPS or localhost.</span>}
+      </div>
+      <div className="glide-panel">
+        <div className="glide-info"><span className="eyebrow">PITCH TRANSITION</span><strong>GLOBAL GLIDE</strong><small>Slides between played notes from keyboard and MIDI</small></div>
+        <button type="button" className={`glide-toggle ${settings.glide.enabled ? "is-active" : ""}`} aria-pressed={settings.glide.enabled} onClick={() => update("glide", { ...settings.glide, enabled: !settings.glide.enabled })}><span className="sync-indicator" /><b>{settings.glide.enabled ? "ON" : "OFF"}</b></button>
+        <div className="glide-amount"><Knob label="GLIDE TIME" value={settings.glide.time} min={0.01} max={2} step={0.01} display={(n) => `${n.toFixed(2)}s`} onChange={(n) => update("glide", { ...settings.glide, time: n })} /></div>
       </div>
       <div className={`microphone-panel ${microphoneActive ? "is-active" : ""}`}>
         <div className="microphone-info"><span className="eyebrow">ALTERNATE PITCH INPUT</span><strong>MICROPHONE → VCO</strong><small>{microphonePitch ? `${microphonePitch.note} · ${microphonePitch.frequency.toFixed(1)} HZ · ${microphonePitch.cents > 0 ? "+" : ""}${microphonePitch.cents}¢` : microphoneStatus}</small></div>
