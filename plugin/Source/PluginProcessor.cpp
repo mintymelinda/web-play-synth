@@ -219,7 +219,12 @@ void WebPlaySynthAudioProcessor::renderRange(juce::AudioBuffer<float>& b,int sta
 {
     for(int i=start;i<end;++i) {
         float left=0.0f, right=0.0f;
-        for(auto& voice:voices) voice.render(p,currentSampleRate,left,right);
+        for(auto& voice:voices) {
+            float voiceLeft=0.0f, voiceRight=0.0f;
+            voice.render(p,currentSampleRate,voiceLeft,voiceRight);
+            left+=voiceLeft;
+            right+=voiceRight;
+        }
         if (b.getNumChannels() == 1)
             b.addSample(0,i,(left+right)*0.5f);
         else {
