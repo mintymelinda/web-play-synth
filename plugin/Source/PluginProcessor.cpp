@@ -149,6 +149,115 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity;
 }
 
+
+namespace {
+struct PresetValue { const char* id; float value; };
+struct FactoryPreset { const char* name; std::initializer_list<PresetValue> values; };
+const std::array<FactoryPreset, 8>& factoryPresets()
+{
+    static const std::array<FactoryPreset, 8> presets {{
+        { "Init", {
+            { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc1Octave", 0 }, { "osc1Tune", 0 },
+            { "osc1Level", .72f }, { "osc2Octave", 0 }, { "osc2Tune", 7 }, { "osc2Level", .38f },
+            { "hardSync", 0 }, { "crossMod", 0 }, { "cutoff", 1800 }, { "resonance", .8f },
+            { "filterContour", .55f }, { "filterType", 0 }, { "filterDrive", 0 },
+            { "filterAttack", .025f }, { "filterDecay", .42f },
+            { "filterSustain", .32f }, { "filterRelease", .38f }, { "ampAttack", .015f },
+            { "ampDecay", .25f }, { "ampSustain", .78f }, { "ampRelease", .32f },
+            { "lfoWave", 0 }, { "lfoRate", 4.5f }, { "lfoPitchDepth", 0 }, { "lfoFilterDepth", 0 }, { "lfoAmpDepth", 0 }, { "lfoPanDepth", 0 },
+            { "master", .72f }, { "unisonVoices", 0 }, { "unisonDetune", 0 }, { "stereoSpread", 0 },
+            { "delayTime", .32f }, { "delayFeedback", .35f }, { "delayMix", 0 },
+            { "reverbMix", 0 }, { "reverbRoom", .55f }, { "reverbDamping", .4f }, { "glideEnabled", 0 }, { "glideTime", .18f },
+            { "vco1Enabled", 1 }, { "vco2Enabled", 1 }, { "filterEnvEnabled", 1 }, { "ampEnvEnabled", 1 }
+        }},
+        { "Warm Analog", {
+            { "osc1Wave", 0 }, { "osc2Wave", 1 }, { "osc1Tune", -4 }, { "osc2Tune", 3 },
+            { "osc1Level", .8f }, { "osc2Level", .28f }, { "cutoff", 2400 }, { "resonance", 1.2f },
+            { "filterContour", .25f }, { "ampAttack", .025f }, { "ampDecay", .4f }, { "ampSustain", .72f },
+            { "ampRelease", .45f }, { "filterAttack", .04f }, { "filterDecay", .7f }, { "filterSustain", .4f },
+            { "filterDrive", 3 }, { "unisonVoices", 1 }, { "unisonDetune", 7 }, { "stereoSpread", .28f }, { "reverbMix", .1f }
+        }},
+        { "Sync Lead", {
+            { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc2Tune", 12 }, { "hardSync", 1 },
+            { "crossMod", 85 }, { "cutoff", 5200 }, { "resonance", 2.2f }, { "filterContour", .7f },
+            { "filterAttack", .005f }, { "filterDecay", .3f }, { "filterSustain", .15f },
+            { "ampAttack", .008f }, { "ampDecay", .18f }, { "ampSustain", .82f }, { "ampRelease", .22f },
+            { "glideEnabled", 1 }, { "glideTime", .12f }, { "filterDrive", 5 }, { "unisonVoices", 1 }, { "unisonDetune", 3 },
+            { "stereoSpread", .22f }, { "delayTime", .24f }, { "delayFeedback", .2f }, { "delayMix", .1f }
+        }},
+        { "Deep Bass", {
+            { "osc1Wave", 3 }, { "osc2Wave", 0 }, { "osc1Octave", -1 }, { "osc2Octave", -1 },
+            { "osc1Tune", 0 }, { "osc2Tune", 7 }, { "osc1Level", .9f }, { "osc2Level", .22f },
+            { "cutoff", 650 }, { "resonance", 1.8f }, { "filterContour", .5f },
+            { "filterAttack", .005f }, { "filterDecay", .5f }, { "filterSustain", .12f },
+            { "ampAttack", .01f }, { "ampDecay", .25f }, { "ampSustain", .8f }, { "ampRelease", .2f },
+            { "filterDrive", 8 }, { "unisonVoices", 1 }, { "unisonDetune", 2 }, { "stereoSpread", 0 }
+        }},
+        { "Glass Pluck", {
+            { "osc1Wave", 0 }, { "osc2Wave", 1 }, { "osc2Tune", 12 }, { "osc1Level", .65f },
+            { "osc2Level", .4f }, { "cutoff", 8500 }, { "resonance", .7f }, { "filterContour", .2f },
+            { "ampAttack", .005f }, { "ampDecay", .65f }, { "ampSustain", .05f }, { "ampRelease", .8f },
+            { "filterAttack", .005f }, { "filterDecay", .8f }, { "filterSustain", .08f },
+            { "lfoWave", 1 }, { "lfoRate", 5.5f }, { "lfoPitchDepth", .3f },
+            { "filterType", 2 }, { "filterDrive", 1 }, { "delayTime", .42f }, { "delayFeedback", .35f },
+            { "delayMix", .18f }, { "reverbMix", .28f }, { "reverbRoom", .62f }
+        }},
+        { "PWM Motion", {
+            { "osc1Wave", 1 }, { "osc2Wave", 3 }, { "crossMod", 35 }, { "cutoff", 3200 },
+            { "resonance", 1.1f }, { "lfoWave", 1 }, { "lfoRate", .35f }, { "lfoPitchDepth", .8f },
+            { "lfoFilterDepth", 900 }, { "filterContour", .35f }, { "ampSustain", .75f },
+            { "unisonVoices", 1 }, { "unisonDetune", 6 }, { "stereoSpread", .6f }, { "lfoAmpDepth", .2f }, { "lfoPanDepth", .5f }
+        }},
+        { "Acid Sequence", {
+            { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc2Tune", 12 }, { "crossMod", 120 },
+            { "cutoff", 1100 }, { "resonance", 8 }, { "filterContour", .9f },
+            { "filterAttack", .005f }, { "filterDecay", .22f }, { "filterSustain", .05f },
+            { "filterRelease", .18f }, { "ampAttack", .005f }, { "ampDecay", .16f },
+            { "ampSustain", .65f }, { "ampRelease", .12f }, { "filterDrive", 12 }, { "lfoAmpDepth", .06f },
+            { "delayTime", .18f }, { "delayFeedback", .16f }, { "delayMix", .08f }
+        }},
+        { "Slow Atmosphere", {
+            { "osc1Wave", 0 }, { "osc2Wave", 1 }, { "osc1Octave", 1 }, { "osc2Octave", 0 },
+            { "osc1Level", .45f }, { "osc2Level", .35f }, { "cutoff", 4200 }, { "resonance", .6f },
+            { "filterAttack", 1.2f }, { "filterDecay", 2.5f }, { "filterSustain", .8f },
+            { "filterRelease", 3.5f }, { "ampAttack", 1.5f }, { "ampDecay", 2.2f },
+            { "ampSustain", .85f }, { "ampRelease", 4.5f }, { "lfoWave", 0 },
+            { "lfoRate", .18f }, { "lfoPitchDepth", .4f }, { "lfoFilterDepth", 650 },
+            { "unisonVoices", 2 }, { "unisonDetune", 20 }, { "stereoSpread", .95f },
+            { "delayTime", .58f }, { "delayFeedback", .6f }, { "delayMix", .38f },
+            { "reverbMix", .65f }, { "reverbRoom", .9f }, { "reverbDamping", .28f },
+            { "lfoAmpDepth", .3f }, { "lfoPanDepth", .45f }
+        }}
+    }};
+    return presets;
+}
+}
+
+const juce::String WebPlaySynthAudioProcessor::getProgramName(int index)
+{
+    if (!juce::isPositiveAndBelow(index, static_cast<int>(factoryPresets().size())))
+        return {};
+    return factoryPresets()[static_cast<size_t>(index)].name;
+}
+
+void WebPlaySynthAudioProcessor::setCurrentProgram(int index)
+{
+    if (!juce::isPositiveAndBelow(index, getNumPrograms()))
+        return;
+    currentProgram.store(index, std::memory_order_relaxed);
+    // Start from a complete known baseline so selecting a preset never leaks
+    // values from whichever patch happened to be loaded before it.
+    const auto applyPreset = [this](const FactoryPreset& preset) {
+        for (const auto& item : preset.values) {
+            if (auto* parameter = parameters.getParameter(item.id))
+                parameter->setValueNotifyingHost(parameter->convertTo0to1(item.value));
+        }
+    };
+    applyPreset(factoryPresets().front());
+    if (index != 0)
+        applyPreset(factoryPresets()[static_cast<size_t>(index)]);
+}
+
 void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
@@ -414,6 +523,7 @@ juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return 
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     if (auto xml = parameters.copyState().createXml()) {
+        xml->setAttribute("CURRENT_PROGRAM", currentProgram.load(std::memory_order_relaxed));
         for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc) {
             const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
             if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size())
@@ -428,6 +538,8 @@ void WebPlaySynthAudioProcessor::setStateInformation(const void* data, int size)
     if (auto xml = getXmlFromBinary(data, size)) {
         if (!xml->hasTagName(parameters.state.getType()))
             return;
+        if (xml->hasAttribute("CURRENT_PROGRAM"))
+            currentProgram.store(juce::jlimit(0, getNumPrograms() - 1, xml->getIntAttribute("CURRENT_PROGRAM")), std::memory_order_relaxed);
 
         for (auto& assignment : midiCcToParameter)
             assignment.store(-1);
