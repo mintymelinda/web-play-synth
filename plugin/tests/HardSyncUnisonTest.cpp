@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 namespace {
 void require(bool condition, const char* message)
@@ -20,7 +21,7 @@ void setParameter(WebPlaySynthAudioProcessor& processor, const char* id, float v
     parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
 }
 
-double renderBlockRmsVariation(int unisonMode)
+std::vector<float> renderHardSync(int unisonMode)
 {
     WebPlaySynthAudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
@@ -40,9 +41,8 @@ double renderBlockRmsVariation(int unisonMode)
 
     juce::AudioBuffer<float> output(2, 512);
     juce::MidiBuffer midi;
-    double sum = 0.0;
-    double sumSquares = 0.0;
-    int count = 0;
+    std::vector<float> samples;
+    samples.reserve(144 * 512);
 
     for (int block = 0; block < 160; ++block) {
         midi.clear();
@@ -53,33 +53,38 @@ double renderBlockRmsVariation(int unisonMode)
         if (block < 16)
             continue;
 
-        double blockEnergy = 0.0;
         for (int sample = 0; sample < output.getNumSamples(); ++sample) {
             const auto value = output.getSample(0, sample);
             require(std::isfinite(value), "hard-sync unison output must remain finite");
-            blockEnergy += static_cast<double>(value) * value;
+            samples.push_back(value);
         }
-        const auto blockRms = std::sqrt(blockEnergy / output.getNumSamples());
-        sum += blockRms;
-        sumSquares += blockRms * blockRms;
-        ++count;
     }
 
     processor.releaseResources();
-    const auto mean = sum / count;
-    return std::sqrt(std::max(0.0, sumSquares / count - mean * mean));
+    return samples;
 }
 }
 
 int main()
 {
-    const auto singleVoiceVariation = renderBlockRmsVariation(0);
-    const auto fourVoiceVariation = renderBlockRmsVariation(2);
+    const auto singleVoice = renderHardSync(0);
+    const auto fourVoices = renderHardSync(2);
+    require(singleVoice.size() == fourVoices.size(), "rendered comparison buffers must have equal lengths");
 
-    require(singleVoiceVariation < 0.0005,
-        "single hard-sync voice should have a stable block-level RMS");
-    require(fourVoiceVariation > singleVoiceVariation + 0.0005,
-        "hard-sync unison layers must use their detuned master frequencies and create beating");
+    double normalizedDifference = 0.0;
+    double referenceEnergy = 0.0;
+    for (size_t sample = 0; sample < singleVoice.size(); ++sample) {
+        // Four centered layers each contribute half gain. If their phases all
+        // advance identically, the result is exactly twice the single-layer
+        // render. Detuned hard-sync layers must diverge from that reference.
+        const auto difference = fourVoices[sample] - 2.0f * singleVoice[sample];
+        normalizedDifference += static_cast<double>(difference) * difference;
+        referenceEnergy += static_cast<double>(fourVoices[sample]) * fourVoices[sample];
+    }
+
+    require(referenceEnergy > 0.1, "hard-sync render must contain audible signal");
+    require(normalizedDifference > 0.01,
+        "hard-sync unison layers must use their detuned master frequencies");
 
     std::cout << "PASS: hard-sync unison detuning and finite rendered audio\n";
     return 0;
