@@ -88,7 +88,8 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     right=0.0f;
     if(!active) return;
     if(!keyDown && !ampEnvelope.isActive()) { active=false; note=-1; return; }
-    const auto glide=p.glideEnabled ? 1.0-std::exp(-1.0/(static_cast<double>(p.glideTime)*sr)) : 1.0;
+    // Match the browser engine's exponential ramp: reach 99.9% of the target within the configured time.
+    const auto glide=p.glideEnabled ? 1.0-std::exp(-std::log(1000.0)/(static_cast<double>(p.glideTime)*sr)) : 1.0;
     currentFrequency+=(targetFrequency-currentFrequency)*glide;
     if (currentFilterType != p.filterType) {
         const auto type = p.filterType == 1 ? juce::dsp::StateVariableTPTFilterType::highpass

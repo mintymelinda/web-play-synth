@@ -142,6 +142,69 @@ int main()
     require(delayTail>0.0001f,"delay feedback must create an audible tail after note-off");
     require(reverbTail>0.0001f,"reverb must create an audible tail after note-off");
 
+
+    // Portamento time is the time to reach the destination, not merely one time constant.
+    const auto estimatePitch = [](const std::vector<float>& samples) {
+        std::vector<double> crossings;
+        for (size_t index=1; index<samples.size(); ++index) {
+            const auto previous=samples[index-1];
+            const auto current=samples[index];
+            if (previous<=0.0f && current>0.0f) {
+                const auto fraction=static_cast<double>(-previous)/(static_cast<double>(current)-previous);
+                crossings.push_back(static_cast<double>(index-1)+fraction);
+            }
+        }
+        if (crossings.size()<2) return 0.0;
+        return static_cast<double>(crossings.size()-1)*48000.0/(crossings.back()-crossings.front());
+    };
+    WebPlaySynthAudioProcessor glideProcessor;
+    glideProcessor.prepareToPlay(48000.0,512);
+    const auto setGlideParameter=[&glideProcessor](const char* id,float value) {
+        auto* parameter=glideProcessor.parameters.getParameter(id);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    };
+    setGlideParameter("osc1Wave",0.0f);
+    setGlideParameter("osc1Level",1.0f);
+    setGlideParameter("osc2Level",0.0f);
+    setGlideParameter("cutoff",18000.0f);
+    setGlideParameter("resonance",0.1f);
+    setGlideParameter("filterEnvEnabled",0.0f);
+    setGlideParameter("ampAttack",0.005f);
+    setGlideParameter("ampDecay",0.005f);
+    setGlideParameter("ampSustain",1.0f);
+    setGlideParameter("ampRelease",0.01f);
+    setGlideParameter("glideEnabled",1.0f);
+    setGlideParameter("glideTime",0.1f);
+    juce::AudioBuffer<float> glideAudio(2,512);
+    juce::MidiBuffer glideMidi;
+    glideMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+    glideProcessor.processBlock(glideAudio,glideMidi);
+    glideMidi.clear();
+    glideMidi.addEvent(juce::MidiMessage::noteOff(1,60),0);
+    for(int block=0;block<20;++block) glideProcessor.processBlock(glideAudio,glideMidi);
+    glideMidi.clear();
+    glideMidi.addEvent(juce::MidiMessage::noteOn(1,72,0.8f),0);
+    glideProcessor.processBlock(glideAudio,glideMidi);
+    std::vector<float> middleGlide;
+    std::vector<float> settledGlide;
+    for(int block=1;block<=12;++block) {
+        glideMidi.clear();
+        glideProcessor.processBlock(glideAudio,glideMidi);
+        if(block>=1 && block<=4)
+            for(int sample=0;sample<glideAudio.getNumSamples();++sample)
+                middleGlide.push_back(glideAudio.getSample(0,sample));
+        if(block>=9)
+            for(int sample=0;sample<glideAudio.getNumSamples();++sample)
+                settledGlide.push_back(glideAudio.getSample(0,sample));
+    }
+    const auto middleFrequency=estimatePitch(middleGlide);
+    const auto settledFrequency=estimatePitch(settledGlide);
+    require(middleFrequency>300.0 && middleFrequency<510.0,
+        "native glide must produce intermediate pitches during its configured transition");
+    require(settledFrequency>510.0 && settledFrequency<536.0,
+        "native glide must reach the target note within its configured duration");
+    glideProcessor.releaseResources();
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
