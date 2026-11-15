@@ -9,7 +9,7 @@ namespace {
 void require(bool condition, const char* message)
 {
     if (!condition) {
-        std::cerr << "FAIL: " << message << '\\n';
+        std::cerr << "FAIL: " << message << '\n';
         std::exit(1);
     }
 }
@@ -94,6 +94,6 @@ int main()
     require(energy(modulatedFilter) > energy(closedFilter) * 2.0,
         "LFO filter depth must audibly open the filter over its modulation cycle");
 
-    std::cout << "PASS: LFO pitch and filter destinations affect rendered audio\\n";
+    std::cout << "PASS: LFO pitch and filter destinations affect rendered audio\n";
     return 0;
 }
