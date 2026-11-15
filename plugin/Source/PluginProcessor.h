@@ -50,7 +50,7 @@ private:
         float crossMod=0, cutoff=1800, resonance=.8f, filterContour=.55f, filterDrive=0;
         float filterAttack=.025f, filterDecay=.42f, filterSustain=.32f, filterRelease=.38f;
         float ampAttack=.015f, ampDecay=.25f, ampSustain=.78f, ampRelease=.32f;
-        float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, master=.72f, glideTime=.18f;
+        float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, lfoAmpDepth=0, lfoPanDepth=0, master=.72f, glideTime=.18f;
         float unisonDetune=0, stereoSpread=0;
         float delayTime=.32f, delayFeedback=.35f, delayMix=0;
         float reverbMix=0, reverbRoom=.55f, reverbDamping=.4f;

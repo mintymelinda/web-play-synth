@@ -54,6 +54,8 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("lfoRate", "RATE", groupSlots[5]);
     addKnob("lfoPitchDepth", "PITCH DEPTH", groupSlots[5]);
     addKnob("lfoFilterDepth", "FILTER DEPTH", groupSlots[5]);
+    addKnob("lfoAmpDepth", "AMP DEPTH", groupSlots[5]);
+    addKnob("lfoPanDepth", "PAN DEPTH", groupSlots[5]);
 
     addGroup("OUTPUT  /  PERFORMANCE + UNISON", groupSlots[6]);
     addKnob("master", "MASTER", groupSlots[6]);
@@ -89,7 +91,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
@@ -98,7 +100,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "Hard Sync", "Cross Modulation",
         "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
-        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth",
+        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth",
         "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Delay Time", "Delay Feedback", "Delay Mix", "Reverb Mix", "Reverb Room", "Reverb Damping", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
         "Filter Env Route", "Amp Env Route"
     };
@@ -117,7 +119,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
             "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
@@ -134,7 +136,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
             "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
@@ -288,7 +290,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
@@ -326,7 +328,7 @@ void WebPlaySynthAudioProcessorEditor::resized()
     layoutGroup(2, { x3, y1, columnWidth, rowHeight }, 3);
     layoutGroup(3, { x1, y2, columnWidth, rowHeight }, 2);
     layoutGroup(4, { x2, y2, columnWidth, rowHeight }, 2);
-    layoutGroup(5, { x3, y2, columnWidth, rowHeight }, 2);
+    layoutGroup(5, { x3, y2, columnWidth, rowHeight }, 3);
     layoutGroup(6, { x1, y3, columnWidth, rowHeight }, 3);
     layoutGroup(7, { x2, y3, columnWidth, rowHeight }, 2);
     layoutGroup(8, { x3, y3, columnWidth, rowHeight }, 3);

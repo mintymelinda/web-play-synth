@@ -12,7 +12,7 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
         "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
@@ -47,7 +47,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     c("filterType","Filter Mode",{ "Low-pass", "High-pass", "Band-pass" },0); f("filterDrive","Filter Drive",0,24,0,.1f);
     f("filterAttack","Filter Envelope Attack",.005f,4,.025f,.001f); f("filterDecay","Filter Envelope Decay",.005f,5,.42f,.001f); f("filterSustain","Filter Envelope Sustain",0,1,.32f); f("filterRelease","Filter Envelope Release",.005f,6,.38f,.001f);
     f("ampAttack","Amp Envelope Attack",.005f,4,.015f,.001f); f("ampDecay","Amp Envelope Decay",.005f,5,.25f,.001f); f("ampSustain","Amp Envelope Sustain",0,1,.78f); f("ampRelease","Amp Envelope Release",.005f,6,.32f,.001f);
-    c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1);
+    c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1); f("lfoAmpDepth","LFO Amp Depth",0,1,0,.01f); f("lfoPanDepth","LFO Pan Depth",0,1,0,.01f);
     f("master","Master Level",0,1,.72f);
     c("unisonVoices","Unison Voices",{ "1", "2", "4" },0); f("unisonDetune","Unison Detune",0,50,0,.1f); f("stereoSpread","Stereo Spread",0,1,0,.01f);
     f("delayTime","Delay Time",.01f,1.5f,.32f,.001f); f("delayFeedback","Delay Feedback",0,.85f,.35f,.01f); f("delayMix","Delay Mix",0,1,0,.01f);
@@ -128,7 +128,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
 
         const auto oscillatorMix=s1*p.osc1Level*(p.vco1Enabled?1.0f:0.0f)
             +s2*p.osc2Level*(p.vco2Enabled?1.0f:0.0f);
-        const auto pan=static_cast<float>(position*p.stereoSpread);
+        const auto pan=juce::jlimit(-1.0f,1.0f,static_cast<float>(position*p.stereoSpread)+static_cast<float>(lfo*p.lfoPanDepth));
         const auto angle=(pan+1.0f)*juce::MathConstants<float>::pi*0.25f;
         mixLeft+=oscillatorMix*std::cos(angle)*panScale*layerGain;
         mixRight+=oscillatorMix*std::sin(angle)*panScale*layerGain;
@@ -144,8 +144,9 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         filter.setCutoffFrequency(cutoff);
         filter.setResonance(p.resonance);
     }
-    left=filters[0].processSample(0,drivenLeft)*amp*velocity;
-    right=filters[1].processSample(0,drivenRight)*amp*velocity;
+    const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
+    left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity;
+    right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity;
 }
 
 void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
@@ -190,7 +191,7 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.filterType=juce::roundToInt(v("filterType")); p.filterDrive=v("filterDrive");
     p.filterAttack=v("filterAttack"); p.filterDecay=v("filterDecay"); p.filterSustain=v("filterSustain"); p.filterRelease=v("filterRelease");
     p.ampAttack=v("ampAttack"); p.ampDecay=v("ampDecay"); p.ampSustain=v("ampSustain"); p.ampRelease=v("ampRelease");
-    p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth");
+    p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth"); p.lfoAmpDepth=v("lfoAmpDepth"); p.lfoPanDepth=v("lfoPanDepth");
     p.master=v("master"); p.unisonVoices=juce::roundToInt(v("unisonVoices")); p.unisonDetune=v("unisonDetune"); p.stereoSpread=v("stereoSpread");
     p.delayTime=v("delayTime"); p.delayFeedback=v("delayFeedback"); p.delayMix=v("delayMix");
     p.reverbMix=v("reverbMix"); p.reverbRoom=v("reverbRoom"); p.reverbDamping=v("reverbDamping");
