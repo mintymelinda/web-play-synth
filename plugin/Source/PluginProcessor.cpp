@@ -432,8 +432,8 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::
         pos = at;
     }
     renderRange(output, pos, output.getNumSamples(), p);
-    output.applyGain(p.master);
     processEffects(output,p);
+    output.applyGain(p.master);
 }
 
 void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output,const Parameters& p)
