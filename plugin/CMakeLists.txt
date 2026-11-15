@@ -62,12 +62,12 @@ if(BUILD_TESTING)
     target_link_libraries(WebPlaySynthHardSyncUnisonTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-hard-sync-unison COMMAND WebPlaySynthHardSyncUnisonTest)
 
-    add_executable(WebPlaySynthPwmPathTest tests/PulseWidthAudioPathTest.cpp)
-    target_include_directories(WebPlaySynthPwmPathTest PRIVATE
+    add_executable(WebPlaySynthLfoPathTest tests/LfoAudioPathTest.cpp)
+    target_include_directories(WebPlaySynthLfoPathTest PRIVATE
         Source
         "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
     )
-    target_compile_features(WebPlaySynthPwmPathTest PRIVATE cxx_std_17)
-    target_link_libraries(WebPlaySynthPwmPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
-    add_test(NAME native-pwm-audio-paths COMMAND WebPlaySynthPwmPathTest)
+    target_compile_features(WebPlaySynthLfoPathTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthLfoPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-lfo-audio-paths COMMAND WebPlaySynthLfoPathTest)
 endif()
