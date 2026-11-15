@@ -123,6 +123,19 @@ int main()
         for (int sample = 0; sample < inputAndOutput.getNumSamples(); ++sample)
             inputTestOutputPeak = juce::jmax(inputTestOutputPeak, std::abs(inputAndOutput.getSample(channel, sample)));
     require(inputTestOutputPeak < 0.000001f, "pitch input must not pass through to the synth output");
+
+    // Enabling the audio input must not disable the instrument's MIDI path.
+    for (int sample = 0; sample < inputAndOutput.getNumSamples(); ++sample)
+        inputAndOutput.setSample(0, sample, 0.5f * std::sin(juce::MathConstants<float>::twoPi * 220.0f * sample / 48000.0f));
+    juce::MidiBuffer inputBusMidi;
+    inputBusMidi.addEvent(juce::MidiMessage::noteOn(1, 60, 0.8f), 0);
+    inputProcessor.processBlock(inputAndOutput, inputBusMidi);
+    float midiWithInputPeak = 0.0f;
+    for (int channel = 0; channel < inputAndOutput.getNumChannels(); ++channel)
+        for (int sample = 0; sample < inputAndOutput.getNumSamples(); ++sample)
+            midiWithInputPeak = juce::jmax(midiWithInputPeak, std::abs(inputAndOutput.getSample(channel, sample)));
+    require(inputProcessor.getPitchInputRms() > 0.3f, "pitch input must remain readable while MIDI is active");
+    require(midiWithInputPeak > 0.0001f, "MIDI must continue producing synth audio with pitch input enabled");
     inputProcessor.releaseResources();
 
     processor.releaseResources();
