@@ -111,6 +111,37 @@ int main()
     require(driveDifference > 0.001f,
         "filter drive must alter the actual pre-filter audio signal");
 
+    // Delay and reverb must continue producing audio after the dry voice releases.
+    const auto renderEffectTail = [](float delayMix, float reverbMix) {
+        WebPlaySynthAudioProcessor effectsProcessor;
+        effectsProcessor.prepareToPlay(48000.0, 512);
+        auto setPlain = [&effectsProcessor](const char* id, float value) {
+            auto* parameter = effectsProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("delayTime", 0.2f); setPlain("delayFeedback", 0.65f); setPlain("delayMix", delayMix);
+        setPlain("reverbMix", reverbMix); setPlain("reverbRoom", 0.8f); setPlain("reverbDamping", 0.2f);
+        juce::AudioBuffer<float> effected(2, 512);
+        juce::MidiBuffer effectMidi;
+        float tailPeak=0.0f;
+        for (int block=0; block<160; ++block) {
+            effectMidi.clear();
+            if (block==0) effectMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            if (block==96) effectMidi.addEvent(juce::MidiMessage::noteOff(1,60),0);
+            effectsProcessor.processBlock(effected,effectMidi);
+            if (block>=140) for (int ch=0; ch<effected.getNumChannels(); ++ch)
+                for (int sample=0; sample<effected.getNumSamples(); ++sample)
+                    tailPeak=juce::jmax(tailPeak,std::abs(effected.getSample(ch,sample)));
+        }
+        effectsProcessor.releaseResources(); return tailPeak;
+    };
+    const auto dryTail=renderEffectTail(0.0f,0.0f);
+    const auto delayTail=renderEffectTail(1.0f,0.0f);
+    const auto reverbTail=renderEffectTail(0.0f,0.8f);
+    require(dryTail<0.0001f,"dry signal must release to silence when effects are disabled");
+    require(delayTail>0.0001f,"delay feedback must create an audible tail after note-off");
+    require(reverbTail>0.0001f,"reverb must create an audible tail after note-off");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");

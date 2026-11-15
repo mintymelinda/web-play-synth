@@ -15,7 +15,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     setResizable(true, true);
     setResizeLimits(760, 700, 1440, 1200);
 
-    groupSlots.resize(8);
+    groupSlots.resize(9);
     addGroup("VCO 01  /  PRIMARY OSCILLATOR", groupSlots[0]);
     addChoice("osc1Wave", "WAVEFORM", { "Sine", "Triangle", "Saw", "Square" }, groupSlots[0]);
     addKnob("osc1Octave", "OCTAVE", groupSlots[0]);
@@ -84,6 +84,11 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     };
     addAndMakeVisible(*presetSelector);
 
+    addGroup("FX  /  STEREO TIME + SPACE", groupSlots[8]);
+    addKnob("delayTime", "DELAY TIME", groupSlots[8]); addKnob("delayFeedback", "FEEDBACK", groupSlots[8]);
+    addKnob("delayMix", "DELAY MIX", groupSlots[8]); addKnob("reverbMix", "REVERB MIX", groupSlots[8]);
+    addKnob("reverbRoom", "ROOM SIZE", groupSlots[8]); addKnob("reverbDamping", "DAMPING", groupSlots[8]);
+
     midiCcGroup = std::make_unique<juce::GroupComponent>();
     midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
     midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
@@ -97,7 +102,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     const juce::StringArray parameterNames {
@@ -125,7 +130,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-            "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -142,7 +147,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-            "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -296,7 +301,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     if (synthProcessor.isMidiCcLearning())
@@ -314,7 +319,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
 void WebPlaySynthAudioProcessorEditor::resized()
 {
     // Host/editor frameworks may request layout during construction or teardown.
-    if (groups.size() != 8 || groupSlots.size() != 8)
+    if (groups.size() != 9 || groupSlots.size() != 9)
         return;
 
     presetSelector->setBounds(getWidth() - 485, 12, 165, 24);
@@ -323,20 +328,19 @@ void WebPlaySynthAudioProcessorEditor::resized()
     const auto gap = 10;
     auto mappingArea = area.removeFromBottom(88);
     area.removeFromBottom(gap);
-    const auto halfWidth = (area.getWidth() - gap) / 2;
-    const auto rowHeight = (area.getHeight() - gap * 3) / 4;
-
-    layoutGroup(0, { area.getX(), area.getY(), halfWidth, rowHeight }, 4);
-    layoutGroup(1, { area.getX() + halfWidth + gap, area.getY(), halfWidth, rowHeight }, 3);
-    auto row2 = area.getY() + rowHeight + gap;
-    layoutGroup(2, { area.getX(), row2, halfWidth, rowHeight }, 3);
-    layoutGroup(3, { area.getX() + halfWidth + gap, row2, halfWidth, rowHeight }, 4);
-    auto row3 = row2 + rowHeight + gap;
-    layoutGroup(4, { area.getX(), row3, halfWidth, rowHeight }, 4);
-    layoutGroup(5, { area.getX() + halfWidth + gap, row3, halfWidth, rowHeight }, 4);
-    auto row4 = row3 + rowHeight + gap;
-    layoutGroup(6, { area.getX(), row4, halfWidth, rowHeight }, 3);
-    layoutGroup(7, { area.getX() + halfWidth + gap, row4, halfWidth, rowHeight }, 2);
+    const auto columnWidth = (area.getWidth() - gap * 2) / 3;
+    const auto rowHeight = (area.getHeight() - gap * 2) / 3;
+    const auto x1 = area.getX(), x2 = x1 + columnWidth + gap, x3 = x2 + columnWidth + gap;
+    const auto y1 = area.getY(), y2 = y1 + rowHeight + gap, y3 = y2 + rowHeight + gap;
+    layoutGroup(0, { x1, y1, columnWidth, rowHeight }, 2);
+    layoutGroup(1, { x2, y1, columnWidth, rowHeight }, 3);
+    layoutGroup(2, { x3, y1, columnWidth, rowHeight }, 3);
+    layoutGroup(3, { x1, y2, columnWidth, rowHeight }, 2);
+    layoutGroup(4, { x2, y2, columnWidth, rowHeight }, 2);
+    layoutGroup(5, { x3, y2, columnWidth, rowHeight }, 2);
+    layoutGroup(6, { x1, y3, columnWidth, rowHeight }, 3);
+    layoutGroup(7, { x2, y3, columnWidth, rowHeight }, 2);
+    layoutGroup(8, { x3, y3, columnWidth, rowHeight }, 3);
 
     midiCcGroup->setBounds(mappingArea);
     auto controls = mappingArea.reduced(12, 25);

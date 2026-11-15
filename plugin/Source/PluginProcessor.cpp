@@ -13,7 +13,7 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     return ids;
@@ -50,6 +50,8 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1);
     f("master","Master Level",0,1,.72f);
     c("unisonVoices","Unison Voices",{ "1", "2", "4" },0); f("unisonDetune","Unison Detune",0,50,0,.1f); f("stereoSpread","Stereo Spread",0,1,0,.01f);
+    f("delayTime","Delay Time",.01f,1.5f,.32f,.001f); f("delayFeedback","Delay Feedback",0,.85f,.35f,.01f); f("delayMix","Delay Mix",0,1,0,.01f);
+    f("reverbMix","Reverb Mix",0,1,0,.01f); f("reverbRoom","Reverb Room Size",.1f,.95f,.55f,.01f); f("reverbDamping","Reverb Damping",0,1,.4f,.01f);
     b("glideEnabled","Global Glide",false); f("glideTime","Glide Time",.01f,2,.18f,.01f);
     b("vco1Enabled","VCO 1 Audio Route",true); b("vco2Enabled","VCO 2 Audio Route",true); b("filterEnvEnabled","Filter Envelope Route",true); b("ampEnvEnabled","Amp Envelope Route",true);
     return l;
@@ -245,8 +247,21 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
     for(auto& v:voices) v.prepare(sr,block);
+    reverb.setSampleRate(sr);
+    reverb.reset();
+    const auto delayBufferSize=static_cast<size_t>(std::ceil(sr*2.0))+2;
+    delayBufferLeft.assign(delayBufferSize,0.0f);
+    delayBufferRight.assign(delayBufferSize,0.0f);
+    delayWritePosition=0;
 }
-void WebPlaySynthAudioProcessor::releaseResources() { for(auto& v:voices) { v.active=false; v.keyDown=false; } }
+void WebPlaySynthAudioProcessor::releaseResources()
+{
+    for(auto& v:voices) { v.active=false; v.keyDown=false; }
+    reverb.reset();
+    std::fill(delayBufferLeft.begin(),delayBufferLeft.end(),0.0f);
+    std::fill(delayBufferRight.begin(),delayBufferRight.end(),0.0f);
+    delayWritePosition=0;
+}
 bool WebPlaySynthAudioProcessor::isBusesLayoutSupported(const BusesLayout& l) const
 {
     if (l.inputBuses.size() != 1 || l.outputBuses.size() != 1)
@@ -272,6 +287,8 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.ampAttack=v("ampAttack"); p.ampDecay=v("ampDecay"); p.ampSustain=v("ampSustain"); p.ampRelease=v("ampRelease");
     p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth");
     p.master=v("master"); p.unisonVoices=juce::roundToInt(v("unisonVoices")); p.unisonDetune=v("unisonDetune"); p.stereoSpread=v("stereoSpread");
+    p.delayTime=v("delayTime"); p.delayFeedback=v("delayFeedback"); p.delayMix=v("delayMix");
+    p.reverbMix=v("reverbMix"); p.reverbRoom=v("reverbRoom"); p.reverbDamping=v("reverbDamping");
     p.glideEnabled=v("glideEnabled")>.5f; p.glideTime=v("glideTime");
     p.vco1Enabled=v("vco1Enabled")>.5f; p.vco2Enabled=v("vco2Enabled")>.5f; p.filterEnvEnabled=v("filterEnvEnabled")>.5f; p.ampEnvEnabled=v("ampEnvEnabled")>.5f;
     return p;
@@ -310,7 +327,49 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::
     }
     renderRange(output, pos, output.getNumSamples(), p);
     output.applyGain(p.master);
+    processEffects(output,p);
 }
+
+void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output,const Parameters& p)
+{
+    const auto channelCount=output.getNumChannels();
+    const auto sampleCount=output.getNumSamples();
+    const auto bufferSize=static_cast<int>(delayBufferLeft.size());
+    if (bufferSize > 2 && channelCount > 0) {
+        const auto delaySamples=juce::jlimit(1,bufferSize-1,juce::roundToInt(p.delayTime*static_cast<float>(currentSampleRate)));
+        const auto feedback=juce::jlimit(0.0f,.85f,p.delayFeedback);
+        const auto mix=juce::jlimit(0.0f,1.0f,p.delayMix);
+        const auto stereo=channelCount > 1;
+        for (int sample=0; sample<sampleCount; ++sample) {
+            auto readPosition=delayWritePosition-delaySamples;
+            if (readPosition < 0) readPosition+=bufferSize;
+            const auto delayedLeft=delayBufferLeft[static_cast<size_t>(readPosition)];
+            const auto delayedRight=stereo ? delayBufferRight[static_cast<size_t>(readPosition)] : delayedLeft;
+            const auto inputLeft=output.getSample(0,sample);
+            if (stereo) {
+                const auto inputRight=output.getSample(1,sample);
+                delayBufferLeft[static_cast<size_t>(delayWritePosition)]=inputLeft+delayedRight*feedback;
+                delayBufferRight[static_cast<size_t>(delayWritePosition)]=inputRight+delayedLeft*feedback;
+                output.setSample(0,sample,inputLeft*(1.0f-mix)+delayedLeft*mix);
+                output.setSample(1,sample,inputRight*(1.0f-mix)+delayedRight*mix);
+            } else {
+                delayBufferLeft[static_cast<size_t>(delayWritePosition)]=inputLeft+delayedLeft*feedback;
+                output.setSample(0,sample,inputLeft*(1.0f-mix)+delayedLeft*mix);
+            }
+            if (++delayWritePosition >= bufferSize) delayWritePosition=0;
+        }
+    }
+    juce::Reverb::Parameters rp;
+    rp.roomSize=p.reverbRoom; rp.damping=p.reverbDamping; rp.wetLevel=p.reverbMix;
+    rp.dryLevel=1.0f-p.reverbMix; rp.width=1.0f; rp.freezeMode=0.0f;
+    const auto& current=reverb.getParameters();
+    if (current.roomSize!=rp.roomSize || current.damping!=rp.damping || current.wetLevel!=rp.wetLevel
+        || current.dryLevel!=rp.dryLevel || current.width!=rp.width || current.freezeMode!=rp.freezeMode)
+        reverb.setParameters(rp);
+    if (channelCount > 1) reverb.processStereo(output.getWritePointer(0),output.getWritePointer(1),sampleCount);
+    else if (channelCount == 1) reverb.processMono(output.getWritePointer(0),sampleCount);
+}
+
 void WebPlaySynthAudioProcessor::renderRange(juce::AudioBuffer<float>& b,int start,int end,const Parameters& p)
 {
     for(int i=start;i<end;++i) {
