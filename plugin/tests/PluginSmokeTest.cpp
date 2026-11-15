@@ -372,6 +372,11 @@ int main()
     require(std::abs(tailProcessor.getTailLengthSeconds()-10.0) < 0.001,
         "combined delay and reverb tails must be additive");
 
+    setTailParameter("chorusMix",1.0f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-0.228) < 0.001,
+        "active chorus must contribute its maximum short delay to the host tail");
+
+
 
     // Browser hard sync replaces VCO 2 with a ratio-shaped periodic waveform.
     const auto renderSyncWave = [](bool hardSync,float oscillator2Wave) {
@@ -423,6 +428,54 @@ int main()
     }
     require(freeWaveformDifference>0.01,
         "VCO 2 waveform selection must remain active when hard sync is disabled");
+
+
+    // Chorus must modulate a preallocated stereo delay line and alter rendered audio.
+    const auto renderChorus = [](float chorusDepth,float chorusMix) {
+        WebPlaySynthAudioProcessor chorusProcessor;
+        chorusProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&chorusProcessor](const char* id,float value) {
+            auto* parameter=chorusProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave",0.0f);
+        setPlain("osc1Level",1.0f);
+        setPlain("osc2Level",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        setPlain("chorusRate",1.7f);
+        setPlain("chorusDepth",chorusDepth);
+        setPlain("chorusMix",chorusMix);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer chorusMidi;
+        std::array<float,512> left {},right {};
+        for(int block=0;block<112;++block) {
+            chorusMidi.clear();
+            if(block==0) chorusMidi.addEvent(juce::MidiMessage::noteOn(1,69,0.8f),0);
+            chorusProcessor.processBlock(output,chorusMidi);
+        }
+        for(int sample=0;sample<output.getNumSamples();++sample) {
+            left[static_cast<size_t>(sample)]=output.getSample(0,sample);
+            right[static_cast<size_t>(sample)]=output.getSample(1,sample);
+        }
+        chorusProcessor.releaseResources();
+        return std::pair {left,right};
+    };
+    const auto dryChorus=renderChorus(0.0f,0.0f);
+    const auto wetChorus=renderChorus(1.0f,1.0f);
+    double chorusDifference=0.0, chorusStereoDifference=0.0;
+    for(size_t sample=0;sample<dryChorus.first.size();++sample) {
+        const auto delta=wetChorus.first[sample]-dryChorus.first[sample];
+        chorusDifference+=delta*delta;
+        const auto stereoDelta=wetChorus.first[sample]-wetChorus.second[sample];
+        chorusStereoDifference+=stereoDelta*stereoDelta;
+    }
+    require(chorusDifference>0.01,
+        "chorus depth and mix must alter the actual rendered voice signal");
+    require(chorusStereoDifference>0.001,
+        "stereo chorus must modulate the two output channels independently");
 
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.

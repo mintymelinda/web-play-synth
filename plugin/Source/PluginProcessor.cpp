@@ -13,7 +13,7 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     return ids;
@@ -50,6 +50,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1); f("lfoAmpDepth","LFO Amp Depth",0,1,0,.01f); f("lfoPanDepth","LFO Pan Depth",0,1,0,.01f);
     f("master","Master Level",0,1,.72f);
     c("unisonVoices","Unison Voices",{ "1", "2", "4" },0); f("unisonDetune","Unison Detune",0,50,0,.1f); f("stereoSpread","Stereo Spread",0,1,0,.01f);
+    f("chorusRate","Chorus Rate",.1f,5.0f,.8f,.01f); f("chorusDepth","Chorus Depth",0,1,.5f,.01f); f("chorusMix","Chorus Mix",0,1,0,.01f);
     f("delayTime","Delay Time",.01f,1.5f,.32f,.001f); f("delayFeedback","Delay Feedback",0,.85f,.35f,.01f); f("delayMix","Delay Mix",0,1,0,.01f);
     f("reverbMix","Reverb Mix",0,1,0,.01f); f("reverbRoom","Reverb Room Size",.1f,.95f,.55f,.01f); f("reverbDamping","Reverb Damping",0,1,.4f,.01f);
     b("glideEnabled","Global Glide",false); f("glideTime","Glide Time",.01f,2,.18f,.01f);
@@ -284,8 +285,9 @@ double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
     const auto delayFeedback = parameters.getRawParameterValue("delayFeedback")->load();
     const auto delayTime = parameters.getRawParameterValue("delayTime")->load();
     const auto reverbMix = parameters.getRawParameterValue("reverbMix")->load();
+    const auto chorusMix = parameters.getRawParameterValue("chorusMix")->load();
 
-    double tailSeconds = 0.0;
+    double tailSeconds = chorusMix > 0.0f ? 0.028 : 0.0;
     if (delayMix > 0.0f) {
         const auto feedback = static_cast<double>(juce::jlimit(0.0f, 0.85f, delayFeedback));
         const auto repeats = feedback > 0.0
@@ -308,6 +310,11 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
     for(auto& v:voices) v.prepare(sr,block);
     reverb.setSampleRate(sr);
     reverb.reset();
+    const auto chorusBufferSize=static_cast<size_t>(std::ceil(sr*0.05))+2;
+    chorusBufferLeft.assign(chorusBufferSize,0.0f);
+    chorusBufferRight.assign(chorusBufferSize,0.0f);
+    chorusWritePosition=0;
+    chorusPhase=0.0;
     const auto delayBufferSize=static_cast<size_t>(std::ceil(sr*2.0))+2;
     delayBufferLeft.assign(delayBufferSize,0.0f);
     delayBufferRight.assign(delayBufferSize,0.0f);
@@ -317,6 +324,10 @@ void WebPlaySynthAudioProcessor::releaseResources()
 {
     for(auto& v:voices) { v.active=false; v.keyDown=false; }
     reverb.reset();
+    std::fill(chorusBufferLeft.begin(),chorusBufferLeft.end(),0.0f);
+    std::fill(chorusBufferRight.begin(),chorusBufferRight.end(),0.0f);
+    chorusWritePosition=0;
+    chorusPhase=0.0;
     std::fill(delayBufferLeft.begin(),delayBufferLeft.end(),0.0f);
     std::fill(delayBufferRight.begin(),delayBufferRight.end(),0.0f);
     delayWritePosition=0;
@@ -346,6 +357,7 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.ampAttack=v("ampAttack"); p.ampDecay=v("ampDecay"); p.ampSustain=v("ampSustain"); p.ampRelease=v("ampRelease");
     p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth"); p.lfoAmpDepth=v("lfoAmpDepth"); p.lfoPanDepth=v("lfoPanDepth");
     p.master=v("master"); p.unisonVoices=juce::roundToInt(v("unisonVoices")); p.unisonDetune=v("unisonDetune"); p.stereoSpread=v("stereoSpread");
+    p.chorusRate=v("chorusRate"); p.chorusDepth=v("chorusDepth"); p.chorusMix=v("chorusMix");
     p.delayTime=v("delayTime"); p.delayFeedback=v("delayFeedback"); p.delayMix=v("delayMix");
     p.reverbMix=v("reverbMix"); p.reverbRoom=v("reverbRoom"); p.reverbDamping=v("reverbDamping");
     p.glideEnabled=v("glideEnabled")>.5f; p.glideTime=v("glideTime");
@@ -393,6 +405,47 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
 {
     const auto channelCount=output.getNumChannels();
     const auto sampleCount=output.getNumSamples();
+    const auto chorusBufferSize=static_cast<int>(chorusBufferLeft.size());
+    if (chorusBufferSize > 2 && channelCount > 0) {
+        const auto mix=juce::jlimit(0.0f,1.0f,p.chorusMix);
+        const auto depthSeconds=0.008f*juce::jlimit(0.0f,1.0f,p.chorusDepth);
+        const auto rate=juce::jlimit(0.1f,5.0f,p.chorusRate);
+        const auto stereo=channelCount > 1;
+        const auto baseDelaySeconds=0.020f;
+        for (int sample=0; sample<sampleCount; ++sample) {
+            const auto inputLeft=output.getSample(0,sample);
+            const auto inputRight=stereo ? output.getSample(1,sample) : inputLeft;
+            chorusBufferLeft[static_cast<size_t>(chorusWritePosition)]=inputLeft;
+            chorusBufferRight[static_cast<size_t>(chorusWritePosition)]=inputRight;
+
+            const auto modLeft=std::sin(chorusPhase);
+            const auto modRight=stereo ? std::sin(chorusPhase+juce::MathConstants<double>::halfPi) : modLeft;
+            const auto delayLeft=(baseDelaySeconds+depthSeconds*modLeft)*currentSampleRate;
+            const auto delayRight=(baseDelaySeconds+depthSeconds*modRight)*currentSampleRate;
+            const auto readWet=[&](const std::vector<float>& buffer,double delaySamples) {
+                const auto wholeDelay=static_cast<int>(std::floor(delaySamples));
+                const auto fraction=static_cast<float>(delaySamples-wholeDelay);
+                auto first=chorusWritePosition-wholeDelay;
+                while(first<0) first+=chorusBufferSize;
+                auto second=first-1;
+                if(second<0) second+=chorusBufferSize;
+                const auto a=buffer[static_cast<size_t>(first)];
+                const auto b=buffer[static_cast<size_t>(second)];
+                return a+(b-a)*fraction;
+            };
+            const auto wetLeft=readWet(chorusBufferLeft,delayLeft);
+            const auto wetRight=stereo ? readWet(chorusBufferRight,delayRight) : wetLeft;
+            output.setSample(0,sample,inputLeft*(1.0f-mix)+wetLeft*mix);
+            if(stereo)
+                output.setSample(1,sample,inputRight*(1.0f-mix)+wetRight*mix);
+
+            chorusPhase+=rate/currentSampleRate;
+            if(chorusPhase>=juce::MathConstants<double>::twoPi)
+                chorusPhase-=juce::MathConstants<double>::twoPi;
+            if(++chorusWritePosition>=chorusBufferSize) chorusWritePosition=0;
+        }
+    }
+
     const auto bufferSize=static_cast<int>(delayBufferLeft.size());
     if (bufferSize > 2 && channelCount > 0) {
         const auto delaySamples=juce::jlimit(1,bufferSize-1,juce::roundToInt(p.delayTime*static_cast<float>(currentSampleRate)));

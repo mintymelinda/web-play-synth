@@ -53,6 +53,7 @@ private:
         float ampAttack=.015f, ampDecay=.25f, ampSustain=.78f, ampRelease=.32f;
         float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, lfoAmpDepth=0, lfoPanDepth=0, master=.72f, glideTime=.18f;
         float unisonDetune=0, stereoSpread=0;
+        float chorusRate=.8f, chorusDepth=.5f, chorusMix=0;
         float delayTime=.32f, delayFeedback=.35f, delayMix=0;
         float reverbMix=0, reverbRoom=.55f, reverbDamping=.4f;
     };
@@ -83,6 +84,9 @@ private:
     static float waveformSample(double phase, int waveform);
     std::array<Voice,16> voices;
     juce::Reverb reverb;
+    std::vector<float> chorusBufferLeft, chorusBufferRight;
+    int chorusWritePosition=0;
+    double chorusPhase=0;
     std::vector<float> delayBufferLeft, delayBufferRight;
     int delayWritePosition=0;
     double currentSampleRate=44100, lastPlayedFrequency=0;
