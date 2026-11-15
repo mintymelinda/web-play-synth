@@ -38,7 +38,7 @@ double renderEnergy(bool ampEnvelopeEnabled, float ampAttack,
     setParameter(processor, "filterAttack", 0.005f);
     setParameter(processor, "filterDecay", 0.005f);
     setParameter(processor, "filterSustain", 1.0f);
-    setParameter(processor, "filterCutoff", filterCutoff);
+    setParameter(processor, "cutoff", filterCutoff);
     setParameter(processor, "filterContour", filterContour);
     setParameter(processor, "resonance", 0.1f);
     setParameter(processor, "master", 1.0f);
