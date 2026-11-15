@@ -728,8 +728,9 @@ bool WebPlaySynthAudioProcessor::savePatchFile(const juce::File& file)
 
     output->setPosition(0);
     output->truncate();
-    output->write(state.getData(), state.getSize());
-    return output->flush();
+    const auto wrote = output->write(state.getData(), state.getSize());
+    output->flush();
+    return wrote && output->getStatus().wasOk();
 }
 
 bool WebPlaySynthAudioProcessor::loadPatchFile(const juce::File& file)
