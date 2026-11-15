@@ -167,7 +167,7 @@ const std::array<FactoryPreset, 8>& factoryPresets()
 }
 }
 
-juce::String WebPlaySynthAudioProcessor::getProgramName(int index)
+const juce::String WebPlaySynthAudioProcessor::getProgramName(int index)
 {
     if (!juce::isPositiveAndBelow(index, static_cast<int>(factoryPresets().size())))
         return {};
