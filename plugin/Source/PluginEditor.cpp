@@ -72,6 +72,9 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addToggle("ampEnvEnabled", "AMP ENV → VCA", groupSlots[7]);
 
     addGroup("FX  /  STEREO TIME + SPACE", groupSlots[8]);
+    addKnob("chorusRate", "CHORUS RATE", groupSlots[8]);
+    addKnob("chorusDepth", "CHORUS DEPTH", groupSlots[8]);
+    addKnob("chorusMix", "CHORUS MIX", groupSlots[8]);
     addKnob("delayTime", "DELAY TIME", groupSlots[8]);
     addKnob("delayFeedback", "FEEDBACK", groupSlots[8]);
     addKnob("delayMix", "DELAY MIX", groupSlots[8]);
@@ -107,7 +110,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     const juce::StringArray parameterNames {
@@ -116,7 +119,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
         "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth",
-        "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Delay Time", "Delay Feedback", "Delay Mix", "Reverb Mix", "Reverb Room", "Reverb Damping", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
+        "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Chorus Rate", "Chorus Depth", "Chorus Mix", "Delay Time", "Delay Feedback", "Delay Mix", "Reverb Mix", "Reverb Room", "Reverb Damping", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
         "Filter Env Route", "Amp Env Route"
     };
     for (int i = 0; i < parameterIds.size(); ++i)
@@ -135,7 +138,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
-            "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -152,7 +155,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
-            "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -306,7 +309,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     if (synthProcessor.isMidiCcLearning())
