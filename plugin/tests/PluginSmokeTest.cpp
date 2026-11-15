@@ -343,7 +343,19 @@ int main()
     require(presetRestored.getCurrentProgram() == 7, "current factory program must survive state restore");
     require(presetRestored.parameters.getRawParameterValue("reverbMix")->load() > 0.6f,
         "new audio-path preset parameters must survive state restore");
+
+    processor.setCurrentProgram(1);
+    require(std::abs(processor.parameters.getRawParameterValue("chorusMix")->load()-0.14f)<0.001f,
+        "Warm Analog must select its chorus amount");
+    processor.setCurrentProgram(7);
+    require(processor.parameters.getRawParameterValue("chorusMix")->load()>0.39f,
+        "Slow Atmosphere must demonstrate the chorus processing path");
     processor.setCurrentProgram(0);
+    require(processor.parameters.getRawParameterValue("chorusMix")->load()==0.0f
+        && std::abs(processor.parameters.getRawParameterValue("chorusRate")->load()-0.8f)<0.001f
+        && std::abs(processor.parameters.getRawParameterValue("chorusDepth")->load()-0.5f)<0.001f,
+        "Init must restore all chorus parameters to their neutral baseline");
+
     require(processor.parameters.getRawParameterValue("cutoff")->load() > 1700.0f,
         "Init program must restore its default filter cutoff");
     require(processor.parameters.getRawParameterValue("delayMix")->load() == 0.0f

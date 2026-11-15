@@ -185,6 +185,7 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "ampDecay", .25f }, { "ampSustain", .78f }, { "ampRelease", .32f },
             { "lfoWave", 0 }, { "lfoRate", 4.5f }, { "lfoPitchDepth", 0 }, { "lfoFilterDepth", 0 }, { "lfoAmpDepth", 0 }, { "lfoPanDepth", 0 },
             { "master", .72f }, { "unisonVoices", 0 }, { "unisonDetune", 0 }, { "stereoSpread", 0 },
+            { "chorusRate", .8f }, { "chorusDepth", .5f }, { "chorusMix", 0 },
             { "delayTime", .32f }, { "delayFeedback", .35f }, { "delayMix", 0 },
             { "reverbMix", 0 }, { "reverbRoom", .55f }, { "reverbDamping", .4f }, { "glideEnabled", 0 }, { "glideTime", .18f },
             { "vco1Enabled", 1 }, { "vco2Enabled", 1 }, { "filterEnvEnabled", 1 }, { "ampEnvEnabled", 1 }
@@ -194,7 +195,8 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "osc1Level", .8f }, { "osc2Level", .28f }, { "cutoff", 2400 }, { "resonance", 1.2f },
             { "filterContour", .25f }, { "ampAttack", .025f }, { "ampDecay", .4f }, { "ampSustain", .72f },
             { "ampRelease", .45f }, { "filterAttack", .04f }, { "filterDecay", .7f }, { "filterSustain", .4f },
-            { "filterDrive", 3 }, { "unisonVoices", 1 }, { "unisonDetune", 7 }, { "stereoSpread", .28f }, { "reverbMix", .1f }
+            { "filterDrive", 3 }, { "unisonVoices", 1 }, { "unisonDetune", 7 }, { "stereoSpread", .28f }, { "reverbMix", .1f },
+            { "chorusRate", .8f }, { "chorusDepth", .45f }, { "chorusMix", .14f }
         }},
         { "Sync Lead", {
             { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc2Tune", 12 }, { "hardSync", 1 },
@@ -202,7 +204,8 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "filterAttack", .005f }, { "filterDecay", .3f }, { "filterSustain", .15f },
             { "ampAttack", .008f }, { "ampDecay", .18f }, { "ampSustain", .82f }, { "ampRelease", .22f },
             { "glideEnabled", 1 }, { "glideTime", .12f }, { "filterDrive", 5 }, { "unisonVoices", 1 }, { "unisonDetune", 3 },
-            { "stereoSpread", .22f }, { "delayTime", .24f }, { "delayFeedback", .2f }, { "delayMix", .1f }
+            { "stereoSpread", .22f }, { "chorusRate", 1.1f }, { "chorusDepth", .28f }, { "chorusMix", .08f },
+            { "delayTime", .24f }, { "delayFeedback", .2f }, { "delayMix", .1f }
         }},
         { "Deep Bass", {
             { "osc1Wave", 3 }, { "osc2Wave", 0 }, { "osc1Octave", -1 }, { "osc2Octave", -1 },
@@ -218,14 +221,15 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "ampAttack", .005f }, { "ampDecay", .65f }, { "ampSustain", .05f }, { "ampRelease", .8f },
             { "filterAttack", .005f }, { "filterDecay", .8f }, { "filterSustain", .08f },
             { "lfoWave", 1 }, { "lfoRate", 5.5f }, { "lfoPitchDepth", .3f },
-            { "filterType", 2 }, { "filterDrive", 1 }, { "delayTime", .42f }, { "delayFeedback", .35f },
+            { "filterType", 2 }, { "filterDrive", 1 }, { "chorusRate", .6f }, { "chorusDepth", .8f }, { "chorusMix", .24f }, { "delayTime", .42f }, { "delayFeedback", .35f },
             { "delayMix", .18f }, { "reverbMix", .28f }, { "reverbRoom", .62f }
         }},
         { "PWM Motion", {
             { "osc1Wave", 1 }, { "osc2Wave", 3 }, { "crossMod", 35 }, { "cutoff", 3200 },
             { "resonance", 1.1f }, { "lfoWave", 1 }, { "lfoRate", .35f }, { "lfoPitchDepth", .8f },
             { "lfoFilterDepth", 900 }, { "filterContour", .35f }, { "ampSustain", .75f },
-            { "unisonVoices", 1 }, { "unisonDetune", 6 }, { "stereoSpread", .6f }, { "lfoAmpDepth", .2f }, { "lfoPanDepth", .5f }
+            { "unisonVoices", 1 }, { "unisonDetune", 6 }, { "stereoSpread", .6f }, { "lfoAmpDepth", .2f }, { "lfoPanDepth", .5f },
+            { "chorusRate", .45f }, { "chorusDepth", .7f }, { "chorusMix", .28f }
         }},
         { "Acid Sequence", {
             { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc2Tune", 12 }, { "crossMod", 120 },
@@ -243,6 +247,7 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "ampSustain", .85f }, { "ampRelease", 4.5f }, { "lfoWave", 0 },
             { "lfoRate", .18f }, { "lfoPitchDepth", .4f }, { "lfoFilterDepth", 650 },
             { "unisonVoices", 2 }, { "unisonDetune", 20 }, { "stereoSpread", .95f },
+            { "chorusRate", .25f }, { "chorusDepth", .95f }, { "chorusMix", .4f },
             { "delayTime", .58f }, { "delayFeedback", .6f }, { "delayMix", .38f },
             { "reverbMix", .65f }, { "reverbRoom", .9f }, { "reverbDamping", .28f },
             { "lfoAmpDepth", .3f }, { "lfoPanDepth", .45f }
