@@ -70,4 +70,13 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthLfoPathTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthLfoPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-lfo-audio-paths COMMAND WebPlaySynthLfoPathTest)
+
+    add_executable(WebPlaySynthLfoAmpPanPathTest tests/LfoAmpPanAudioPathTest.cpp)
+    target_include_directories(WebPlaySynthLfoAmpPanPathTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthLfoAmpPanPathTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthLfoAmpPanPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-lfo-amp-pan-audio-paths COMMAND WebPlaySynthLfoAmpPanPathTest)
 endif()
