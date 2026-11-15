@@ -73,7 +73,7 @@ void WebPlaySynthAudioProcessor::Voice::start(int n,float vel,const Parameters& 
     currentFrequency=p.glideEnabled && previous>0 ? previous : targetFrequency;
     ampEnvelope.setParameters({p.ampAttack,p.ampDecay,p.ampSustain,p.ampRelease});
     filterEnvelope.setParameters({p.filterAttack,p.filterDecay,p.filterSustain,p.filterRelease});
-    ampEnvelope.noteOn(); filterEnvelope.noteOn(); filter.reset();
+    ampEnvelope.noteOn(); filterEnvelope.noteOn();
 }
 void WebPlaySynthAudioProcessor::Voice::stop()
 {
