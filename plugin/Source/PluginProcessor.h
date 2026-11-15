@@ -57,6 +57,7 @@ private:
         float delayTime=.32f, delayFeedback=.35f, delayMix=0;
         float reverbMix=0, reverbRoom=.55f, reverbDamping=.4f;
         double glideCoefficient=1.0;
+        double osc1FrequencyRatio=1.0, osc2FrequencyRatio=1.0, hardSyncRatio=1.0;
         float filterDriveGain=1.0f, unisonLayerGain=1.0f;
         std::array<double,4> unisonDetuneRatios {1.0,1.0,1.0,1.0};
         std::array<float,4> unisonPanPositions {};
