@@ -57,9 +57,14 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
 
 void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
 {
-    filter.prepare({sr,static_cast<juce::uint32>(block),1});
-    filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass); filter.reset(); currentFilterType=0;
-    ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
+    for (auto& filter : filters) {
+        filter.prepare({sr,static_cast<juce::uint32>(block),1});
+        filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+        filter.reset();
+    }
+    currentFilterType=0;
+    ampEnvelope.setSampleRate(sr);
+    filterEnvelope.setSampleRate(sr);
 }
 void WebPlaySynthAudioProcessor::Voice::start(int n,float vel,const Parameters& p,double previous)
 {
@@ -87,7 +92,8 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         const auto type = p.filterType == 1 ? juce::dsp::StateVariableTPTFilterType::highpass
             : p.filterType == 2 ? juce::dsp::StateVariableTPTFilterType::bandpass
                                 : juce::dsp::StateVariableTPTFilterType::lowpass;
-        filter.setType(type);
+        for (auto& filter : filters)
+            filter.setType(type);
         currentFilterType = p.filterType;
     }
     const auto base1=currentFrequency*std::pow(2.0,(p.osc1Octave*12.0+p.osc1Tune)/12.0);
@@ -129,10 +135,15 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     const auto amp=p.ampEnvEnabled?ampEnvelope.getNextSample():1.0f;
     const auto env=p.filterEnvEnabled?filterEnvelope.getNextSample():0.0f;
     const auto cutoff=juce::jlimit(30.0f,19000.0f,p.cutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
-    filter.setCutoffFrequency(cutoff); filter.setResonance(p.resonance);
     const auto driveGain = std::pow(10.0f, p.filterDrive / 20.0f);
-    const auto drivenMix = p.filterDrive > 0.0f ? std::tanh(mix * driveGain) : mix;
-    return filter.processSample(0,drivenMix)*amp*velocity;
+    const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * driveGain) : mixLeft;
+    const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * driveGain) : mixRight;
+    for (auto& filter : filters) {
+        filter.setCutoffFrequency(cutoff);
+        filter.setResonance(p.resonance);
+    }
+    left = filters[0].processSample(0, drivenLeft) * amp * velocity;
+    right = filters[1].processSample(0, drivenRight) * amp * velocity;
 }
 
 
