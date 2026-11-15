@@ -55,11 +55,13 @@ int main()
 
     juce::MidiBuffer midi;
     midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.8f), 0);
-    const auto audibleDelay = renderBlock(processor, midi);
+    float audibleDelay = renderBlock(processor, midi);
+    midi.clear();
+    for (int block = 0; block < 8; ++block)
+        audibleDelay = juce::jmax(audibleDelay, renderBlock(processor, midi));
     require(audibleDelay > 0.001f,
         "wet-only delay must produce audible output before the master is muted");
 
-    midi.clear();
     midi.addEvent(juce::MidiMessage::noteOff(1, 69), 0);
     renderBlock(processor, midi);
 
