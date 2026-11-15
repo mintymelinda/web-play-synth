@@ -3,7 +3,6 @@
 #include <array>
 #include <atomic>
 #include <initializer_list>
-#include <initializer_list>
 
 class WebPlaySynthAudioProcessor final : public juce::AudioProcessor {
 public:
