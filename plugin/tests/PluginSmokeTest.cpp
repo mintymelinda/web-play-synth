@@ -234,7 +234,7 @@ int main()
     for(int block=1;block<=12;++block) {
         glideMidi.clear();
         glideProcessor.processBlock(glideAudio,glideMidi);
-        if(block>=3 && block<=6)
+        if(block>=1 && block<=4)
             for(int sample=0;sample<glideAudio.getNumSamples();++sample)
                 middleGlide.push_back(glideAudio.getSample(0,sample));
         if(block>=9)
