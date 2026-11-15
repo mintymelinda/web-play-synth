@@ -28,6 +28,8 @@ public:
     void changeProgramName(int, const juce::String&) override {}
     void getStateInformation(juce::MemoryBlock& destinationData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
+    bool savePatchFile(const juce::File& file);
+    bool loadPatchFile(const juce::File& file);
     using ParameterState = juce::AudioProcessorValueTreeState;
     ParameterState parameters;
 
