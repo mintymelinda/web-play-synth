@@ -547,6 +547,42 @@ int main()
     require(pwmDifference>0.01,
         "LFO pulse-width depth must animate the oscillator duty cycle");
 
+    // Full-depth settings must remain finite with four unison layers and all modulation/effects active.
+    WebPlaySynthAudioProcessor denseProcessor;
+    denseProcessor.prepareToPlay(48000.0,512);
+    const auto setDense=[&denseProcessor](const char* id,float value) {
+        auto* parameter=denseProcessor.parameters.getParameter(id);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    };
+    setDense("unisonVoices",2.0f);
+    setDense("unisonDetune",50.0f);
+    setDense("stereoSpread",1.0f);
+    setDense("lfoPanDepth",1.0f);
+    setDense("lfoPulseDepth",0.45f);
+    setDense("lfoAmpDepth",1.0f);
+    setDense("filterDrive",24.0f);
+    setDense("resonance",18.0f);
+    setDense("filterType",2.0f);
+    setDense("chorusMix",1.0f);
+    setDense("delayMix",1.0f);
+    setDense("reverbMix",1.0f);
+    juce::AudioBuffer<float> denseAudio(2,512);
+    juce::MidiBuffer denseMidi;
+    for(int block=0;block<64;++block) {
+        denseMidi.clear();
+        if(block==0) {
+            denseMidi.addEvent(juce::MidiMessage::noteOn(1,48,0.8f),0);
+            denseMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            denseMidi.addEvent(juce::MidiMessage::noteOn(1,67,0.8f),0);
+        }
+        denseProcessor.processBlock(denseAudio,denseMidi);
+        for(int channel=0;channel<denseAudio.getNumChannels();++channel)
+            for(int sample=0;sample<denseAudio.getNumSamples();++sample)
+                require(std::isfinite(denseAudio.getSample(channel,sample)),
+                    "maximum polyphonic DSP settings must not produce non-finite audio");
+    }
+    denseProcessor.releaseResources();
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");

@@ -56,6 +56,12 @@ private:
         float chorusRate=.8f, chorusDepth=.5f, chorusMix=0;
         float delayTime=.32f, delayFeedback=.35f, delayMix=0;
         float reverbMix=0, reverbRoom=.55f, reverbDamping=.4f;
+        double glideCoefficient=1.0;
+        float filterDriveGain=1.0f, unisonLayerGain=1.0f;
+        std::array<double,4> unisonDetuneRatios {1.0,1.0,1.0,1.0};
+        std::array<float,4> unisonPanPositions {};
+        std::array<float,4> unisonLeftGains {1.0f,1.0f,1.0f,1.0f};
+        std::array<float,4> unisonRightGains {1.0f,1.0f,1.0f,1.0f};
     };
     struct Voice {
         std::array<juce::dsp::StateVariableTPTFilter<float>, 2> filters;
@@ -66,6 +72,7 @@ private:
         std::array<double, 4> phase1 {}, phase2 {};
         double lfoPhase=0, currentFrequency=440, targetFrequency=440;
         int currentFilterType=-1;
+        float currentResonance=-1.0f;
         void prepare(double sampleRate, int maximumBlockSize);
         void start(int midiNote, float noteVelocity, const Parameters& p, double previousFrequency);
         void stop();

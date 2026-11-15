@@ -89,7 +89,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     if(!active) return;
     if(!keyDown && !ampEnvelope.isActive()) { active=false; note=-1; return; }
     // Match the browser engine's exponential ramp: reach 99.9% of the target within the configured time.
-    const auto glide=p.glideEnabled ? 1.0-std::exp(-std::log(1000.0)/(static_cast<double>(p.glideTime)*sr)) : 1.0;
+    const auto glide=p.glideCoefficient;
     currentFrequency+=(targetFrequency-currentFrequency)*glide;
     if (currentFilterType != p.filterType) {
         const auto type = p.filterType == 1 ? juce::dsp::StateVariableTPTFilterType::highpass
@@ -106,12 +106,9 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     if(lfoPhase>=1) lfoPhase-=std::floor(lfoPhase);
 
     const int unisonCount = 1 << juce::jlimit(0, 2, p.unisonVoices);
-    const auto layerGain = 1.0f / std::sqrt(static_cast<float>(unisonCount));
-    const auto panScale = juce::MathConstants<float>::sqrt2;
     float mixLeft=0.0f, mixRight=0.0f;
     for (int layer=0; layer<unisonCount; ++layer) {
-        const auto position = unisonCount == 1 ? 0.0 : -1.0 + (2.0 * layer / static_cast<double>(unisonCount - 1));
-        const auto detuneRatio = std::pow(2.0, p.unisonDetune * position / 1200.0);
+        const auto detuneRatio = p.unisonDetuneRatios[static_cast<size_t>(layer)];
         const auto mod = static_cast<double>(lfo*p.lfoPitchDepth);
         const auto f1=juce::jlimit(10.0,20000.0,base1*detuneRatio+mod);
         const auto f2=juce::jlimit(10.0,20000.0,base2*detuneRatio+mod);
@@ -149,22 +146,30 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
 
         const auto oscillatorMix=s1*p.osc1Level*(p.vco1Enabled?1.0f:0.0f)
             +s2*p.osc2Level*(p.vco2Enabled?1.0f:0.0f);
-        const auto pan=juce::jlimit(-1.0f,1.0f,static_cast<float>(position*p.stereoSpread)+static_cast<float>(lfo*p.lfoPanDepth));
-        const auto angle=(pan+1.0f)*juce::MathConstants<float>::pi*0.25f;
-        mixLeft+=oscillatorMix*std::cos(angle)*panScale*layerGain;
-        mixRight+=oscillatorMix*std::sin(angle)*panScale*layerGain;
+        if (p.lfoPanDepth > 0.0f) {
+            const auto pan=juce::jlimit(-1.0f,1.0f,p.unisonPanPositions[static_cast<size_t>(layer)]+static_cast<float>(lfo*p.lfoPanDepth));
+            const auto angle=(pan+1.0f)*juce::MathConstants<float>::pi*0.25f;
+            const auto panScale=juce::MathConstants<float>::sqrt2;
+            mixLeft+=oscillatorMix*std::cos(angle)*panScale*p.unisonLayerGain;
+            mixRight+=oscillatorMix*std::sin(angle)*panScale*p.unisonLayerGain;
+        } else {
+            mixLeft+=oscillatorMix*p.unisonLeftGains[static_cast<size_t>(layer)];
+            mixRight+=oscillatorMix*p.unisonRightGains[static_cast<size_t>(layer)];
+        }
     }
 
     const auto amp=p.ampEnvEnabled?ampEnvelope.getNextSample():1.0f;
     const auto env=p.filterEnvEnabled?filterEnvelope.getNextSample():0.0f;
     const auto cutoff=juce::jlimit(30.0f,19000.0f,p.cutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
-    const auto driveGain = std::pow(10.0f, p.filterDrive / 20.0f);
-    const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * driveGain) : mixLeft;
-    const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * driveGain) : mixRight;
-    for (auto& filter : filters) {
-        filter.setCutoffFrequency(cutoff);
-        filter.setResonance(p.resonance);
+    const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * p.filterDriveGain) : mixLeft;
+    const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * p.filterDriveGain) : mixRight;
+    if (currentResonance != p.resonance) {
+        for (auto& filter : filters)
+            filter.setResonance(p.resonance);
+        currentResonance=p.resonance;
     }
+    for (auto& filter : filters)
+        filter.setCutoffFrequency(cutoff);
     const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
     left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity;
     right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity;
@@ -370,6 +375,25 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.reverbMix=v("reverbMix"); p.reverbRoom=v("reverbRoom"); p.reverbDamping=v("reverbDamping");
     p.glideEnabled=v("glideEnabled")>.5f; p.glideTime=v("glideTime");
     p.vco1Enabled=v("vco1Enabled")>.5f; p.vco2Enabled=v("vco2Enabled")>.5f; p.filterEnvEnabled=v("filterEnvEnabled")>.5f; p.ampEnvEnabled=v("ampEnvEnabled")>.5f;
+
+    // Values that only change with the parameter snapshot belong here, not in
+    // the per-voice/per-sample renderer.
+    p.glideCoefficient=p.glideEnabled
+        ? 1.0-std::exp(-std::log(1000.0)/(static_cast<double>(p.glideTime)*currentSampleRate))
+        : 1.0;
+    p.filterDriveGain=std::pow(10.0f,p.filterDrive/20.0f);
+    const auto unisonCount=1<<juce::jlimit(0,2,p.unisonVoices);
+    const auto layerGain=1.0f/std::sqrt(static_cast<float>(unisonCount));
+    p.unisonLayerGain=layerGain;
+    const auto panScale=juce::MathConstants<float>::sqrt2;
+    for(int layer=0;layer<4;++layer) {
+        const auto position=unisonCount==1?0.0:(layer<unisonCount?-1.0+2.0*layer/static_cast<double>(unisonCount-1):0.0);
+        p.unisonDetuneRatios[static_cast<size_t>(layer)]=std::pow(2.0,p.unisonDetune*position/1200.0);
+        p.unisonPanPositions[static_cast<size_t>(layer)]=static_cast<float>(position*p.stereoSpread);
+        const auto angle=(p.unisonPanPositions[static_cast<size_t>(layer)]+1.0f)*juce::MathConstants<float>::pi*0.25f;
+        p.unisonLeftGains[static_cast<size_t>(layer)]=std::cos(angle)*panScale*layerGain;
+        p.unisonRightGains[static_cast<size_t>(layer)]=std::sin(angle)*panScale*layerGain;
+    }
     return p;
 }
 void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& midi)
