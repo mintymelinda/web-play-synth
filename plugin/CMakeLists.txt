@@ -61,4 +61,22 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthHardSyncUnisonTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthHardSyncUnisonTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-hard-sync-unison COMMAND WebPlaySynthHardSyncUnisonTest)
+
+    add_executable(WebPlaySynthMidiExpressionTest tests/MidiExpressionPerformanceTest.cpp)
+    target_include_directories(WebPlaySynthMidiExpressionTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthMidiExpressionTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthMidiExpressionTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-midi-expression-performance COMMAND WebPlaySynthMidiExpressionTest)
+
+    add_executable(WebPlaySynthAftertouchPathTest tests/AftertouchAudioPathTest.cpp)
+    target_include_directories(WebPlaySynthAftertouchPathTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthAftertouchPathTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthAftertouchPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-aftertouch-audio-paths COMMAND WebPlaySynthAftertouchPathTest)
 endif()
