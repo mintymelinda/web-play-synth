@@ -36,6 +36,14 @@ The first build fetches JUCE 8.0.6 through CMake FetchContent. The framework ver
 
 The native editor provides grouped oscillator, filter, envelope, LFO, output, glide, and routing controls. Parameters remain host-automatable and use JUCE attachments so host automation and the editor stay synchronized.
 
+## MIDI performance expression
+
+The native instrument responds to standard channel MIDI pitch wheel messages with a ±2-semitone range, applied independently to voices on the addressed MIDI channel. New notes inherit that channel's current bend, and returning the wheel to center restores nominal pitch.
+
+Sustain pedal (CC 64) holds released notes on its MIDI channel until the pedal is lifted. Channel-mode CC 120 (All Sound Off), CC 121 (Reset All Controllers), and CC 123 (All Notes Off) are handled as performance messages rather than being mistaken for ordinary parameter mappings. These channel messages do not require MIDI CC learn assignments.
+
+Automated rendered-audio coverage verifies pitch-bend changes the waveform and sustain keeps notes sounding after key release, then releases them through the configured amp envelope when the pedal is lifted.
+
 ## CI artifacts
 
 The Linux CI job builds both VST3 and Standalone formats, runs a MIDI/audio/state smoke test, and publishes a downloadable `web-play-synth-linux-x86_64` artifact for 14 days.
