@@ -249,6 +249,74 @@ int main()
         "native glide must reach the target note within its configured duration");
     glideProcessor.releaseResources();
 
+
+    // The LFO has real amplitude and stereo-pan destinations in addition to pitch/filter.
+    const auto renderLfoRoutes = [](float ampDepth,float panDepth) {
+        WebPlaySynthAudioProcessor lfoProcessor;
+        lfoProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&lfoProcessor](const char* id,float value) {
+            auto* parameter=lfoProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave",0.0f);
+        setPlain("osc1Level",1.0f);
+        setPlain("osc2Level",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        setPlain("lfoWave",0.0f);
+        setPlain("lfoRate",5.0f);
+        setPlain("lfoAmpDepth",ampDepth);
+        setPlain("lfoPanDepth",panDepth);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer routeMidi;
+        double highAmpEnergy=0.0,lowAmpEnergy=0.0;
+        double rightEarlyEnergy=0.0,leftEarlyEnergy=0.0;
+        double rightLateEnergy=0.0,leftLateEnergy=0.0;
+        int ampSamples=0,panSamples=0;
+        for(int block=0;block<18;++block) {
+            routeMidi.clear();
+            if(block==0) routeMidi.addEvent(juce::MidiMessage::noteOn(1,69,0.8f),0);
+            lfoProcessor.processBlock(output,routeMidi);
+            for(int sample=0;sample<output.getNumSamples();++sample) {
+                const auto left=output.getSample(0,sample);
+                const auto right=output.getSample(1,sample);
+                if(block>=2 && block<=3) {
+                    highAmpEnergy+=static_cast<double>(left)*left+static_cast<double>(right)*right;
+                    ++ampSamples;
+                }
+                if(block>=13 && block<=14) {
+                    lowAmpEnergy+=static_cast<double>(left)*left+static_cast<double>(right)*right;
+                }
+                if(block>=4 && block<=5) {
+                    leftEarlyEnergy+=static_cast<double>(left)*left;
+                    rightEarlyEnergy+=static_cast<double>(right)*right;
+                    ++panSamples;
+                }
+                if(block>=13 && block<=14) {
+                    leftLateEnergy+=static_cast<double>(left)*left;
+                    rightLateEnergy+=static_cast<double>(right)*right;
+                }
+            }
+        }
+        lfoProcessor.releaseResources();
+        return std::array<double,6> {
+            std::sqrt(highAmpEnergy/(2.0*ampSamples)),
+            std::sqrt(lowAmpEnergy/(2.0*ampSamples)),
+            std::sqrt(leftEarlyEnergy/panSamples),
+            std::sqrt(rightEarlyEnergy/panSamples),
+            std::sqrt(leftLateEnergy/panSamples),
+            std::sqrt(rightLateEnergy/panSamples)
+        };
+    };
+    const auto tremolo=renderLfoRoutes(1.0f,0.0f);
+    require(tremolo[0]>tremolo[1]*4.0,
+        "LFO amplitude depth must create audible tremolo in the voice output");
+    const auto autoPan=renderLfoRoutes(0.0f,1.0f);
+    require(autoPan[3]>autoPan[2]*2.0 && autoPan[4]>autoPan[5]*2.0,
+        "LFO pan depth must move the voice from right to left across the stereo field");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
