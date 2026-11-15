@@ -372,6 +372,58 @@ int main()
     require(std::abs(tailProcessor.getTailLengthSeconds()-10.0) < 0.001,
         "combined delay and reverb tails must be additive");
 
+
+    // Browser hard sync replaces VCO 2 with a ratio-shaped periodic waveform.
+    const auto renderSyncWave = [](bool hardSync,float oscillator2Wave) {
+        WebPlaySynthAudioProcessor syncProcessor;
+        syncProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&syncProcessor](const char* id,float value) {
+            auto* parameter=syncProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Level",0.0f);
+        setPlain("osc2Level",1.0f);
+        setPlain("osc1Wave",0.0f);
+        setPlain("osc2Wave",oscillator2Wave);
+        setPlain("osc2Tune",7.0f);
+        setPlain("hardSync",hardSync?1.0f:0.0f);
+        setPlain("crossMod",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer syncMidi;
+        for(int block=0;block<96;++block) {
+            syncMidi.clear();
+            if(block==0) syncMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            syncProcessor.processBlock(output,syncMidi);
+        }
+        std::array<float,512> samples {};
+        for(int sample=0;sample<output.getNumSamples();++sample)
+            samples[static_cast<size_t>(sample)]=output.getSample(0,sample);
+        syncProcessor.releaseResources();
+        return samples;
+    };
+    const auto syncedSineSelection=renderSyncWave(true,0.0f);
+    const auto syncedSquareSelection=renderSyncWave(true,3.0f);
+    double syncedWaveformDifference=0.0;
+    for(size_t sample=0;sample<syncedSineSelection.size();++sample) {
+        const auto delta=syncedSineSelection[sample]-syncedSquareSelection[sample];
+        syncedWaveformDifference+=delta*delta;
+    }
+    require(syncedWaveformDifference<0.000001,
+        "hard sync must use the ratio-shaped sync wave regardless of VCO 2 waveform selection");
+    const auto freeSine=renderSyncWave(false,0.0f);
+    const auto freeSquare=renderSyncWave(false,3.0f);
+    double freeWaveformDifference=0.0;
+    for(size_t sample=0;sample<freeSine.size();++sample) {
+        const auto delta=freeSine[sample]-freeSquare[sample];
+        freeWaveformDifference+=delta*delta;
+    }
+    require(freeWaveformDifference>0.01,
+        "VCO 2 waveform selection must remain active when hard sync is disabled");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
