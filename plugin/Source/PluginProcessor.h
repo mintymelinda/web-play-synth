@@ -67,15 +67,17 @@ private:
     struct Voice {
         std::array<juce::dsp::StateVariableTPTFilter<float>, 2> filters;
         juce::ADSR ampEnvelope, filterEnvelope;
-        bool active=false, keyDown=false;
-        int note=-1, age=0;
+        bool active=false, keyDown=false, sustainHeld=false;
+        int note=-1, midiChannel=1, age=0;
+        float pitchBendSemitones=0.0f;
         float velocity=0;
         std::array<double, 4> phase1 {}, phase2 {};
         double lfoPhase=0, currentFrequency=440, targetFrequency=440;
         int currentFilterType=-1;
         float currentResonance=-1.0f;
         void prepare(double sampleRate, int maximumBlockSize);
-        void start(int midiNote, float noteVelocity, const Parameters& p, double previousFrequency);
+        void start(int midiNote, float noteVelocity, int channel, float pitchBend, const Parameters& p, double previousFrequency);
+        void release();
         void stop();
         void render(const Parameters& p, double sampleRate, float& left, float& right);
     };
@@ -85,8 +87,10 @@ private:
     void processEffects(juce::AudioBuffer<float>& output, const Parameters& p);
     void handleMidiMessage(const juce::MidiMessage& message, const Parameters& p);
     Voice* findVoiceToStart();
-    void startNote(int note, float velocity, const Parameters& p);
-    void stopNote(int note);
+    void startNote(int note, float velocity, int channel, const Parameters& p);
+    void stopNote(int note, int channel);
+    std::array<float, 16> channelPitchBendSemitones {};
+    std::array<bool, 16> sustainPedalDown {};
     static float oscillatorSample(double phase, double increment, int waveform, float pulseWidth = 0.5f);
     static float polyBlep(double phase, double increment);
     static float waveformSample(double phase, int waveform);
