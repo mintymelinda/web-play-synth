@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <initializer_list>
+#include <vector>
 
 class WebPlaySynthAudioProcessor final : public juce::AudioProcessor {
 public:
@@ -54,6 +55,8 @@ private:
         float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, master=.72f, glideTime=.18f;
         int unisonVoices=0;
         float unisonDetune=0, stereoSpread=0;
+        float delayTime=.32f, delayFeedback=.35f, delayMix=0;
+        float reverbMix=0, reverbRoom=.55f, reverbDamping=.4f;
     };
     struct Voice {
         std::array<juce::dsp::StateVariableTPTFilter<float>, 2> filters;
@@ -72,6 +75,7 @@ private:
     static ParameterState::ParameterLayout createParameterLayout();
     Parameters readParameters() const;
     void renderRange(juce::AudioBuffer<float>& buffer, int start, int end, const Parameters& p);
+    void processEffects(juce::AudioBuffer<float>& output, const Parameters& p);
     void handleMidiMessage(const juce::MidiMessage& message, const Parameters& p);
     Voice* findVoiceToStart();
     void startNote(int note, float velocity, const Parameters& p);
@@ -80,6 +84,9 @@ private:
     static float polyBlep(double phase, double increment);
     static float waveformSample(double phase, int waveform);
     std::array<Voice,16> voices;
+    juce::Reverb reverb;
+    std::vector<float> delayBufferLeft, delayBufferRight;
+    int delayWritePosition=0;
     double currentSampleRate=44100, lastPlayedFrequency=0;
     int voiceAge=0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebPlaySynthAudioProcessor)
