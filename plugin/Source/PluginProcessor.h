@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <initializer_list>
+#include <initializer_list>
 
 class WebPlaySynthAudioProcessor final : public juce::AudioProcessor {
 public:
@@ -45,10 +46,10 @@ private:
     std::atomic<float> pitchInputRms { 0.0f };
     std::atomic<int> currentProgram { 0 };
     struct Parameters {
-        int osc1Wave=2, osc2Wave=3, lfoWave=0;
+        int osc1Wave=2, osc2Wave=3, lfoWave=0, filterType=0;
         float osc1Octave=0, osc1Tune=0, osc1Level=.72f, osc2Octave=0, osc2Tune=7, osc2Level=.38f;
         bool hardSync=false, glideEnabled=false, vco1Enabled=true, vco2Enabled=true, filterEnvEnabled=true, ampEnvEnabled=true;
-        float crossMod=0, cutoff=1800, resonance=.8f, filterContour=.55f;
+        float crossMod=0, cutoff=1800, resonance=.8f, filterContour=.55f, filterDrive=0;
         float filterAttack=.025f, filterDecay=.42f, filterSustain=.32f, filterRelease=.38f;
         float ampAttack=.015f, ampDecay=.25f, ampSustain=.78f, ampRelease=.32f;
         float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, master=.72f, glideTime=.18f;
@@ -60,6 +61,7 @@ private:
         int note=-1, age=0;
         float velocity=0;
         double phase1=0, phase2=0, lfoPhase=0, currentFrequency=440, targetFrequency=440;
+        int currentFilterType=-1;
         void prepare(double sampleRate, int maximumBlockSize);
         void start(int midiNote, float noteVelocity, const Parameters& p, double previousFrequency);
         void stop();
