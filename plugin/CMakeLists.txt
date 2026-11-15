@@ -34,4 +34,13 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthSmokeTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
+
+    add_executable(WebPlaySynthAudioPathTest tests/AudioPathRegressionTest.cpp)
+    target_include_directories(WebPlaySynthAudioPathTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthAudioPathTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthAudioPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-audio-path-regressions COMMAND WebPlaySynthAudioPathTest)
 endif()
