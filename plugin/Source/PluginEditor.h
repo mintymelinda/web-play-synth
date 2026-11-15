@@ -41,6 +41,7 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> sliderAttachments;
     std::vector<std::unique_ptr<ComboAttachment>> comboAttachments;
     std::vector<std::unique_ptr<ButtonAttachment>> buttonAttachments;
+    std::unique_ptr<juce::ComboBox> presetSelector;
     std::unique_ptr<juce::GroupComponent> midiCcGroup;
     std::unique_ptr<juce::ComboBox> midiCcTarget;
     std::unique_ptr<juce::TextButton> midiCcLearnButton, midiCcClearButton;

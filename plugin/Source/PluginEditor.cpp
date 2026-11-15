@@ -64,6 +64,21 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addToggle("filterEnvEnabled", "FILTER ENV → VCF", groupSlots[7]);
     addToggle("ampEnvEnabled", "AMP ENV → VCA", groupSlots[7]);
 
+    presetSelector = std::make_unique<juce::ComboBox>();
+    for (int program = 0; program < synthProcessor.getNumPrograms(); ++program)
+        presetSelector->addItem(synthProcessor.getProgramName(program), program + 1);
+    presetSelector->setSelectedId(synthProcessor.getCurrentProgram() + 1, juce::dontSendNotification);
+    presetSelector->setTooltip("Load a factory patch. Parameter changes remain host-automatable.");
+    presetSelector->setColour(juce::ComboBox::backgroundColourId, panel);
+    presetSelector->setColour(juce::ComboBox::textColourId, text);
+    presetSelector->setColour(juce::ComboBox::outlineColourId, border);
+    presetSelector->onChange = [this] {
+        const auto selected = presetSelector->getSelectedId();
+        if (selected > 0)
+            synthProcessor.setCurrentProgram(selected - 1);
+    };
+    addAndMakeVisible(*presetSelector);
+
     midiCcGroup = std::make_unique<juce::GroupComponent>();
     midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
     midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
@@ -285,6 +300,9 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         const auto mapping = synthProcessor.getMidiCcMappingForParameter(parameterIds[index]);
         midiCcStatus->setText(mapping.isNotEmpty() ? "Assigned to MIDI CC " + mapping : "No MIDI CC assigned", juce::dontSendNotification);
     }
+    const auto programId = synthProcessor.getCurrentProgram() + 1;
+    if (presetSelector->getSelectedId() != programId)
+        presetSelector->setSelectedId(programId, juce::dontSendNotification);
     repaint();
 }
 
@@ -294,6 +312,7 @@ void WebPlaySynthAudioProcessorEditor::resized()
     if (groups.size() != 8 || groupSlots.size() != 8)
         return;
 
+    presetSelector->setBounds(getWidth() - 485, 12, 165, 24);
     auto area = getLocalBounds().reduced(16);
     area.removeFromTop(58);
     const auto gap = 10;
