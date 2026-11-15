@@ -58,6 +58,59 @@ int main()
     require(processor.parameters.getRawParameterValue("cutoff")->load() > 1700.0f,
         "Init program must restore its default filter cutoff");
 
+
+    // The native filter exposes three functioning topologies, not cosmetic modes.
+    const auto renderFilterTone = [](int filterMode, float filterDrive) {
+        WebPlaySynthAudioProcessor filterProcessor;
+        filterProcessor.prepareToPlay(48000.0, 512);
+        auto setPlain = [&filterProcessor](const char* id, float value) {
+            auto* parameter = filterProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave", 0.0f);
+        setPlain("osc1Level", 1.0f);
+        setPlain("osc2Level", 0.0f);
+        setPlain("cutoff", 1800.0f);
+        setPlain("resonance", 0.8f);
+        setPlain("filterType", static_cast<float>(filterMode));
+        setPlain("filterDrive", filterDrive);
+        setPlain("ampEnvEnabled", 0.0f);
+        setPlain("filterEnvEnabled", 0.0f);
+        juce::AudioBuffer<float> tone(2, 512);
+        juce::MidiBuffer toneMidi;
+        for (int block = 0; block < 96; ++block) {
+            toneMidi.clear();
+            if (block == 0)
+                toneMidi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.8f), 0);
+            filterProcessor.processBlock(tone, toneMidi);
+        }
+        std::array<float, 512> samples {};
+        for (int sample = 0; sample < tone.getNumSamples(); ++sample)
+            samples[static_cast<size_t>(sample)] = tone.getSample(0, sample);
+        filterProcessor.releaseResources();
+        return samples;
+    };
+    const auto lowPassTone = renderFilterTone(0, 0.0f);
+    const auto highPassTone = renderFilterTone(1, 0.0f);
+    float lowPassEnergy = 0.0f;
+    float highPassEnergy = 0.0f;
+    for (size_t sample = 0; sample < lowPassTone.size(); ++sample) {
+        lowPassEnergy += lowPassTone[sample] * lowPassTone[sample];
+        highPassEnergy += highPassTone[sample] * highPassTone[sample];
+    }
+    require(lowPassEnergy > highPassEnergy * 4.0f,
+        "low-pass and high-pass filter modes must produce different frequency responses");
+
+    const auto cleanTone = renderFilterTone(0, 0.0f);
+    const auto drivenTone = renderFilterTone(0, 18.0f);
+    float driveDifference = 0.0f;
+    for (size_t sample = 0; sample < cleanTone.size(); ++sample) {
+        const auto delta = drivenTone[sample] - cleanTone[sample];
+        driveDifference += delta * delta;
+    }
+    require(driveDifference > 0.001f,
+        "filter drive must alter the actual pre-filter audio signal");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
