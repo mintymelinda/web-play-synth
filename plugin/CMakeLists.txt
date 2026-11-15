@@ -61,4 +61,13 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthHardSyncUnisonTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthHardSyncUnisonTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-hard-sync-unison COMMAND WebPlaySynthHardSyncUnisonTest)
+
+    add_executable(WebPlaySynthDspStressTest tests/DspStressTest.cpp)
+    target_include_directories(WebPlaySynthDspStressTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthDspStressTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthDspStressTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-dsp-stress-matrix COMMAND WebPlaySynthDspStressTest)
 endif()
