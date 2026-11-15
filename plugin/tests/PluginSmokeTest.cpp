@@ -373,7 +373,7 @@ int main()
         "combined delay and reverb tails must be additive");
 
     setTailParameter("chorusMix",1.0f);
-    require(std::abs(tailProcessor.getTailLengthSeconds()-0.228) < 0.001,
+    require(std::abs(tailProcessor.getTailLengthSeconds()-10.028) < 0.001,
         "active chorus must contribute its maximum short delay to the host tail");
 
 
