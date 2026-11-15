@@ -363,7 +363,9 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 }
 void WebPlaySynthAudioProcessor::releaseResources()
 {
-    for(auto& v:voices) { v.active=false; v.keyDown=false; }
+    for(auto& v:voices) { v.active=false; v.keyDown=false; v.sustainHeld=false; }
+    channelPitchBendSemitones.fill(0.0f);
+    sustainPedalDown.fill(false);
     reverb.reset();
     std::fill(chorusBufferLeft.begin(),chorusBufferLeft.end(),0.0f);
     std::fill(chorusBufferRight.begin(),chorusBufferRight.end(),0.0f);
@@ -586,6 +588,47 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
             midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
             if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
                 parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
+            return;
+        }
+
+        // Channel-mode messages are handled as performance semantics,
+        // before the generic user CC mapping layer.
+        if (cc == 120) {
+            for (auto& voice : voices) {
+                if (voice.active && voice.midiChannel == channel) {
+                    voice.active=false;
+                    voice.keyDown=false;
+                    voice.sustainHeld=false;
+                    voice.ampEnvelope.reset();
+                    voice.filterEnvelope.reset();
+                    voice.note=-1;
+                }
+            }
+            return;
+        }
+        if (cc == 123) {
+            for (auto& voice : voices) {
+                if (voice.active && voice.midiChannel == channel && voice.keyDown) {
+                    voice.keyDown=false;
+                    if (sustainPedalDown[channelIndex])
+                        voice.sustainHeld=true;
+                    else
+                        voice.release();
+                }
+            }
+            return;
+        }
+        if (cc == 121) {
+            sustainPedalDown[channelIndex]=false;
+            channelPitchBendSemitones[channelIndex]=0.0f;
+            for (auto& voice : voices) {
+                if (voice.active && voice.midiChannel == channel) {
+                    voice.targetFrequency=juce::MidiMessage::getMidiNoteInHertz(voice.note);
+                    voice.pitchBendSemitones=0.0f;
+                    if (voice.sustainHeld)
+                        voice.release();
+                }
+            }
             return;
         }
 
