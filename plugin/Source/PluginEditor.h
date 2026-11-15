@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -29,6 +30,8 @@ private:
     void addToggle(const juce::String& id, const juce::String& label, std::vector<Slot>& slots);
     void layoutGroup(int groupIndex, juce::Rectangle<int> bounds, int columns);
     void timerCallback() override;
+    void setActivePage(int page);
+    void updatePageVisibility();
 
     WebPlaySynthAudioProcessor& synthProcessor;
     State& state;
@@ -41,6 +44,8 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> sliderAttachments;
     std::vector<std::unique_ptr<ComboAttachment>> comboAttachments;
     std::vector<std::unique_ptr<ButtonAttachment>> buttonAttachments;
+    std::array<std::unique_ptr<juce::TextButton>, 4> pageButtons;
+    int activePage = 0;
     std::unique_ptr<juce::ComboBox> presetSelector;
     std::unique_ptr<juce::GroupComponent> midiCcGroup;
     std::unique_ptr<juce::ComboBox> midiCcTarget;
