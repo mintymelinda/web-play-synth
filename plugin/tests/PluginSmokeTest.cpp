@@ -92,6 +92,60 @@ int main()
     require(driveDifference > 0.001f,
         "filter drive must alter the actual pre-filter audio signal");
 
+
+    // Internal unison layers detune the oscillator pairs and create a real stereo field.
+    const auto renderUnison = [](float voiceMode, float detune, float spread) {
+        WebPlaySynthAudioProcessor unisonProcessor;
+        unisonProcessor.prepareToPlay(48000.0, 512);
+        auto setPlain = [&unisonProcessor](const char* id, float value) {
+            auto* parameter = unisonProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave", 0.0f);
+        setPlain("osc1Level", 1.0f);
+        setPlain("osc2Level", 0.0f);
+        setPlain("unisonVoices", voiceMode);
+        setPlain("unisonDetune", detune);
+        setPlain("stereoSpread", spread);
+        setPlain("ampEnvEnabled", 0.0f);
+        setPlain("filterEnvEnabled", 0.0f);
+        juce::AudioBuffer<float> tone(2, 512);
+        juce::MidiBuffer toneMidi;
+        for (int block = 0; block < 96; ++block) {
+            toneMidi.clear();
+            if (block == 0)
+                toneMidi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.8f), 0);
+            unisonProcessor.processBlock(tone, toneMidi);
+        }
+        std::array<float, 512> leftSamples {}, rightSamples {};
+        for (int sample = 0; sample < tone.getNumSamples(); ++sample) {
+            leftSamples[static_cast<size_t>(sample)] = tone.getSample(0, sample);
+            rightSamples[static_cast<size_t>(sample)] = tone.getSample(1, sample);
+        }
+        unisonProcessor.releaseResources();
+        return std::pair { leftSamples, rightSamples };
+    };
+    const auto singleVoice = renderUnison(0.0f, 0.0f, 0.0f);
+    const auto stackedVoices = renderUnison(2.0f, 20.0f, 0.0f);
+    float unisonDifference = 0.0f;
+    float monoStereoDifference = 0.0f;
+    for (size_t sample = 0; sample < singleVoice.first.size(); ++sample) {
+        const auto difference = stackedVoices.first[sample] - singleVoice.first[sample];
+        unisonDifference += difference * difference;
+        const auto channelDifference = singleVoice.first[sample] - singleVoice.second[sample];
+        monoStereoDifference += channelDifference * channelDifference;
+    }
+    require(unisonDifference > 0.001f, "detuned unison voices must change the rendered oscillator signal");
+    require(monoStereoDifference < 0.000001f, "one unison voice with zero spread must retain centered mono imaging");
+
+    const auto spreadVoices = renderUnison(2.0f, 20.0f, 1.0f);
+    float stereoImageDifference = 0.0f;
+    for (size_t sample = 0; sample < spreadVoices.first.size(); ++sample) {
+        const auto difference = spreadVoices.first[sample] - spreadVoices.second[sample];
+        stereoImageDifference += difference * difference;
+    }
+    require(stereoImageDifference > 0.001f, "stereo spread must pan detuned unison layers across the output channels");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");

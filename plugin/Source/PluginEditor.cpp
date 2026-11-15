@@ -55,8 +55,11 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("lfoPitchDepth", "PITCH DEPTH", groupSlots[5]);
     addKnob("lfoFilterDepth", "FILTER DEPTH", groupSlots[5]);
 
-    addGroup("OUTPUT  /  PERFORMANCE", groupSlots[6]);
+    addGroup("OUTPUT  /  PERFORMANCE + UNISON", groupSlots[6]);
     addKnob("master", "MASTER", groupSlots[6]);
+    addChoice("unisonVoices", "UNISON VOICES", { "1", "2", "4" }, groupSlots[6]);
+    addKnob("unisonDetune", "DETUNE", groupSlots[6]);
+    addKnob("stereoSpread", "STEREO SPREAD", groupSlots[6]);
     addToggle("glideEnabled", "GLOBAL GLIDE", groupSlots[6]);
     addKnob("glideTime", "GLIDE TIME", groupSlots[6]);
 
@@ -79,7 +82,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     const juce::StringArray parameterNames {
@@ -88,7 +91,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
         "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth",
-        "Master Level", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
+        "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
         "Filter Env Route", "Amp Env Route"
     };
     for (int i = 0; i < parameterIds.size(); ++i)
@@ -107,7 +110,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-            "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -124,7 +127,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-            "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -278,7 +281,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     if (synthProcessor.isMidiCcLearning())

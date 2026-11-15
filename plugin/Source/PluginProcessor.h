@@ -43,26 +43,28 @@ private:
     std::atomic<int> midiCcLearnTarget { -1 };
     std::atomic<float> pitchInputRms { 0.0f };
     struct Parameters {
-        int osc1Wave=2, osc2Wave=3, lfoWave=0, filterType=0;
+        int osc1Wave=2, osc2Wave=3, lfoWave=0, filterType=0, unisonVoices=0;
         float osc1Octave=0, osc1Tune=0, osc1Level=.72f, osc2Octave=0, osc2Tune=7, osc2Level=.38f;
         bool hardSync=false, glideEnabled=false, vco1Enabled=true, vco2Enabled=true, filterEnvEnabled=true, ampEnvEnabled=true;
         float crossMod=0, cutoff=1800, resonance=.8f, filterContour=.55f, filterDrive=0;
         float filterAttack=.025f, filterDecay=.42f, filterSustain=.32f, filterRelease=.38f;
         float ampAttack=.015f, ampDecay=.25f, ampSustain=.78f, ampRelease=.32f;
         float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, master=.72f, glideTime=.18f;
+        float unisonDetune=0, stereoSpread=0;
     };
     struct Voice {
-        juce::dsp::StateVariableTPTFilter<float> filter;
+        std::array<juce::dsp::StateVariableTPTFilter<float>, 2> filters;
         juce::ADSR ampEnvelope, filterEnvelope;
         bool active=false, keyDown=false;
         int note=-1, age=0;
         float velocity=0;
-        double phase1=0, phase2=0, lfoPhase=0, currentFrequency=440, targetFrequency=440;
+        std::array<double, 4> phase1 {}, phase2 {};
+        double lfoPhase=0, currentFrequency=440, targetFrequency=440;
         int currentFilterType=-1;
         void prepare(double sampleRate, int maximumBlockSize);
         void start(int midiNote, float noteVelocity, const Parameters& p, double previousFrequency);
         void stop();
-        float render(const Parameters& p, double sampleRate);
+        void render(const Parameters& p, double sampleRate, float& left, float& right);
     };
     static ParameterState::ParameterLayout createParameterLayout();
     Parameters readParameters() const;
