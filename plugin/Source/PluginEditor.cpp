@@ -79,6 +79,21 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("reverbRoom", "ROOM SIZE", groupSlots[8]);
     addKnob("reverbDamping", "DAMPING", groupSlots[8]);
 
+    presetSelector = std::make_unique<juce::ComboBox>();
+    for (int program = 0; program < synthProcessor.getNumPrograms(); ++program)
+        presetSelector->addItem(synthProcessor.getProgramName(program), program + 1);
+    presetSelector->setSelectedId(synthProcessor.getCurrentProgram() + 1, juce::dontSendNotification);
+    presetSelector->setTooltip("Load a factory patch. Changes remain host-automatable and saved in plugin state.");
+    presetSelector->setColour(juce::ComboBox::backgroundColourId, panel);
+    presetSelector->setColour(juce::ComboBox::textColourId, text);
+    presetSelector->setColour(juce::ComboBox::outlineColourId, border);
+    presetSelector->onChange = [this] {
+        const auto selected = presetSelector->getSelectedId();
+        if (selected > 0)
+            synthProcessor.setCurrentProgram(selected - 1);
+    };
+    addAndMakeVisible(*presetSelector);
+
     midiCcGroup = std::make_unique<juce::GroupComponent>();
     midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
     midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
@@ -300,6 +315,9 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         const auto mapping = synthProcessor.getMidiCcMappingForParameter(parameterIds[index]);
         midiCcStatus->setText(mapping.isNotEmpty() ? "Assigned to MIDI CC " + mapping : "No MIDI CC assigned", juce::dontSendNotification);
     }
+    const auto programId = synthProcessor.getCurrentProgram() + 1;
+    if (presetSelector->getSelectedId() != programId)
+        presetSelector->setSelectedId(programId, juce::dontSendNotification);
     repaint();
 }
 
@@ -310,7 +328,8 @@ void WebPlaySynthAudioProcessorEditor::resized()
         return;
 
     auto area = getLocalBounds().reduced(16);
-    area.removeFromTop(58);
+    presetSelector->setBounds(getWidth() - 205, 55, 185, 24);
+    area.removeFromTop(82);
     const auto gap = 10;
     auto mappingArea = area.removeFromBottom(88);
     area.removeFromBottom(gap);

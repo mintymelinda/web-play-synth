@@ -317,6 +317,40 @@ int main()
     require(autoPan[3]>autoPan[2]*2.0 && autoPan[4]>autoPan[5]*2.0,
         "LFO pan depth must move the voice from right to left across the stereo field");
 
+    // Factory patches exercise the newly implemented native audio paths.
+    require(processor.getNumPrograms() == 8, "native instrument must expose eight factory programs");
+    require(processor.getProgramName(0) == "Init", "first factory program must be Init");
+    processor.setCurrentProgram(3);
+    require(processor.getCurrentProgram() == 3, "program selection must update the current index");
+    require(processor.parameters.getRawParameterValue("cutoff")->load() < 700.0f,
+        "Deep Bass must apply its low filter cutoff");
+    processor.setCurrentProgram(4);
+    require(static_cast<int>(std::round(processor.parameters.getRawParameterValue("filterType")->load())) == 2,
+        "Glass Pluck must select the implemented band-pass filter");
+    require(processor.parameters.getRawParameterValue("delayMix")->load() > 0.15f
+        && processor.parameters.getRawParameterValue("reverbMix")->load() > 0.2f,
+        "Glass Pluck must enable the delay and reverb audio paths");
+    processor.setCurrentProgram(7);
+    require(static_cast<int>(std::round(processor.parameters.getRawParameterValue("unisonVoices")->load())) == 2,
+        "Slow Atmosphere must select four-layer unison");
+    require(processor.parameters.getRawParameterValue("lfoPanDepth")->load() > 0.4f
+        && processor.parameters.getRawParameterValue("reverbMix")->load() > 0.6f,
+        "Slow Atmosphere must use LFO pan and reverb destinations");
+    juce::MemoryBlock presetState;
+    processor.getStateInformation(presetState);
+    WebPlaySynthAudioProcessor presetRestored;
+    presetRestored.setStateInformation(presetState.getData(), static_cast<int>(presetState.getSize()));
+    require(presetRestored.getCurrentProgram() == 7, "current factory program must survive state restore");
+    require(presetRestored.parameters.getRawParameterValue("reverbMix")->load() > 0.6f,
+        "new audio-path preset parameters must survive state restore");
+    processor.setCurrentProgram(0);
+    require(processor.parameters.getRawParameterValue("cutoff")->load() > 1700.0f,
+        "Init program must restore its default filter cutoff");
+    require(processor.parameters.getRawParameterValue("delayMix")->load() == 0.0f
+        && processor.parameters.getRawParameterValue("filterDrive")->load() == 0.0f
+        && processor.parameters.getRawParameterValue("lfoPanDepth")->load() == 0.0f,
+        "Init must reset optional native audio paths to their neutral state");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
