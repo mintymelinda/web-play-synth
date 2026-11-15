@@ -30,10 +30,12 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("crossMod", "FM AMOUNT", groupSlots[1]);
     addToggle("hardSync", "HARD SYNC", groupSlots[1]);
 
-    addGroup("VCF  /  RESONANT LOW-PASS FILTER", groupSlots[2]);
+    addGroup("VCF  /  MULTI-MODE FILTER + DRIVE", groupSlots[2]);
+    addChoice("filterType", "MODE", { "Low-pass", "High-pass", "Band-pass" }, groupSlots[2]);
     addKnob("cutoff", "CUTOFF", groupSlots[2]);
     addKnob("resonance", "RESONANCE", groupSlots[2]);
     addKnob("filterContour", "CONTOUR", groupSlots[2]);
+    addKnob("filterDrive", "DRIVE", groupSlots[2]);
 
     addGroup("VCA  /  AMPLIFIER ENVELOPE", groupSlots[3]);
     addKnob("ampAttack", "ATTACK", groupSlots[3]);
@@ -74,7 +76,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     const juce::StringArray parameterIds {
         "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
         "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
-        "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+        "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
         "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
@@ -83,7 +85,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     const juce::StringArray parameterNames {
         "VCO 1 Waveform", "VCO 2 Waveform", "VCO 1 Octave", "VCO 1 Tune", "VCO 1 Level",
         "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "Hard Sync", "Cross Modulation",
-        "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Env Attack", "Filter Env Decay",
+        "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
         "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth",
         "Master Level", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
@@ -102,7 +104,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         const juce::StringArray parameterIds {
             "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
             "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
-            "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+            "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
             "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
@@ -119,7 +121,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         const juce::StringArray parameterIds {
             "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
             "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
-            "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+            "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
             "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
             "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
@@ -273,7 +275,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
     const juce::StringArray parameterIds {
         "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
         "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
-        "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+        "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
         "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
