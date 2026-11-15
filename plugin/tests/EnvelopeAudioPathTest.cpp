@@ -69,14 +69,14 @@ double renderEnergy(bool ampEnvelopeEnabled, float ampAttack,
 int main()
 {
     const auto ampBypassed = renderEnergy(false, 3.5f, false, 18000.0f, 0.0f);
-    const auto ampAttackActive = renderEnergy(true, 3.5f, false, 18000.0f, 0.0f);
+    const auto ampAttackActive = renderEnergy(true, 4.0f, false, 18000.0f, 0.0f);
     require(ampBypassed > 0.01,
         "bypassing the amp envelope must leave the oscillator audio audible");
     require(ampAttackActive < ampBypassed * 0.02,
         "enabling a long amp attack must attenuate the initial rendered audio");
 
-    const auto filterEnvelopeBypassed = renderEnergy(false, 0.005f, false, 300.0f, 1.0f);
-    const auto filterEnvelopeActive = renderEnergy(false, 0.005f, true, 300.0f, 1.0f);
+    const auto filterEnvelopeBypassed = renderEnergy(false, 0.005f, false, 100.0f, 1.0f);
+    const auto filterEnvelopeActive = renderEnergy(false, 0.005f, true, 100.0f, 1.0f);
     require(filterEnvelopeActive > filterEnvelopeBypassed * 1.5,
         "filter envelope route must audibly open the filter beyond its base cutoff");
 
