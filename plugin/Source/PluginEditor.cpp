@@ -21,12 +21,14 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("osc1Octave", "OCTAVE", groupSlots[0]);
     addKnob("osc1Tune", "TUNE", groupSlots[0]);
     addKnob("osc1Level", "LEVEL", groupSlots[0]);
+    addKnob("osc1PulseWidth", "PULSE WIDTH", groupSlots[0]);
 
     addGroup("VCO 02  /  MODULATOR OSCILLATOR", groupSlots[1]);
     addChoice("osc2Wave", "WAVEFORM", { "Sine", "Triangle", "Saw", "Square" }, groupSlots[1]);
     addKnob("osc2Octave", "OCTAVE", groupSlots[1]);
     addKnob("osc2Tune", "TUNE", groupSlots[1]);
     addKnob("osc2Level", "LEVEL", groupSlots[1]);
+    addKnob("osc2PulseWidth", "PULSE WIDTH", groupSlots[1]);
     addKnob("crossMod", "FM AMOUNT", groupSlots[1]);
     addToggle("hardSync", "HARD SYNC", groupSlots[1]);
 
@@ -56,6 +58,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("lfoFilterDepth", "FILTER DEPTH", groupSlots[5]);
     addKnob("lfoAmpDepth", "AMP DEPTH", groupSlots[5]);
     addKnob("lfoPanDepth", "PAN DEPTH", groupSlots[5]);
+    addKnob("lfoPulseDepth", "PWM DEPTH", groupSlots[5]);
 
     addGroup("OUTPUT  /  PERFORMANCE + UNISON", groupSlots[6]);
     addKnob("master", "MASTER", groupSlots[6]);
@@ -105,20 +108,20 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
 
     midiCcTarget = std::make_unique<juce::ComboBox>();
     const juce::StringArray parameterIds {
-        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+        "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     const juce::StringArray parameterNames {
-        "VCO 1 Waveform", "VCO 2 Waveform", "VCO 1 Octave", "VCO 1 Tune", "VCO 1 Level",
-        "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "Hard Sync", "Cross Modulation",
+        "VCO 1 Waveform", "VCO 2 Waveform", "VCO 1 Octave", "VCO 1 Tune", "VCO 1 Level", "VCO 1 Pulse Width",
+        "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "VCO 2 Pulse Width", "Hard Sync", "Cross Modulation",
         "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
-        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth",
+        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth", "LFO Pulse Depth",
         "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Chorus Rate", "Chorus Depth", "Chorus Mix", "Delay Time", "Delay Feedback", "Delay Mix", "Reverb Mix", "Reverb Room", "Reverb Damping", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
         "Filter Env Route", "Amp Env Route"
     };
@@ -133,11 +136,11 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     midiCcLearnButton = std::make_unique<juce::TextButton>("LEARN CC");
     midiCcLearnButton->onClick = [this] {
         const juce::StringArray parameterIds {
-            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-            "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+            "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
             "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
@@ -150,11 +153,11 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     midiCcClearButton = std::make_unique<juce::TextButton>("CLEAR");
     midiCcClearButton->onClick = [this] {
         const juce::StringArray parameterIds {
-            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-            "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+            "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
             "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
@@ -304,11 +307,11 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
 {
     const auto index = midiCcTarget->getSelectedId() - 1;
     const juce::StringArray parameterIds {
-        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+        "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };

@@ -46,12 +46,12 @@ private:
     std::atomic<int> currentProgram { 0 };
     struct Parameters {
         int osc1Wave=2, osc2Wave=3, lfoWave=0, filterType=0, unisonVoices=0;
-        float osc1Octave=0, osc1Tune=0, osc1Level=.72f, osc2Octave=0, osc2Tune=7, osc2Level=.38f;
+        float osc1Octave=0, osc1Tune=0, osc1Level=.72f, osc1PulseWidth=.5f, osc2Octave=0, osc2Tune=7, osc2Level=.38f, osc2PulseWidth=.5f;
         bool hardSync=false, glideEnabled=false, vco1Enabled=true, vco2Enabled=true, filterEnvEnabled=true, ampEnvEnabled=true;
         float crossMod=0, cutoff=1800, resonance=.8f, filterContour=.55f, filterDrive=0;
         float filterAttack=.025f, filterDecay=.42f, filterSustain=.32f, filterRelease=.38f;
         float ampAttack=.015f, ampDecay=.25f, ampSustain=.78f, ampRelease=.32f;
-        float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, lfoAmpDepth=0, lfoPanDepth=0, master=.72f, glideTime=.18f;
+        float lfoRate=4.5f, lfoPitchDepth=0, lfoFilterDepth=0, lfoAmpDepth=0, lfoPanDepth=0, lfoPulseDepth=0, master=.72f, glideTime=.18f;
         float unisonDetune=0, stereoSpread=0;
         float chorusRate=.8f, chorusDepth=.5f, chorusMix=0;
         float delayTime=.32f, delayFeedback=.35f, delayMix=0;
@@ -79,7 +79,7 @@ private:
     Voice* findVoiceToStart();
     void startNote(int note, float velocity, const Parameters& p);
     void stopNote(int note);
-    static float oscillatorSample(double phase, double increment, int waveform);
+    static float oscillatorSample(double phase, double increment, int waveform, float pulseWidth = 0.5f);
     static float polyBlep(double phase, double increment);
     static float waveformSample(double phase, int waveform);
     std::array<Voice,16> voices;
