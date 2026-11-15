@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 namespace {
 void require(bool condition, const char* message)
@@ -52,13 +53,14 @@ float renderPeak(WebPlaySynthAudioProcessor& processor, juce::MidiBuffer& midi)
     return peak;
 }
 
-double renderPitchBend(bool bend)
+std::vector<float> renderPitchBend(bool bend)
 {
     WebPlaySynthAudioProcessor processor;
     configure(processor, false);
     juce::MidiBuffer midi;
-    double energy = 0.0;
     juce::AudioBuffer<float> output(2, 256);
+    std::vector<float> rendered;
+    rendered.reserve(10 * 256);
 
     for (int block = 0; block < 12; ++block) {
         midi.clear();
@@ -68,21 +70,31 @@ double renderPitchBend(bool bend)
             midi.addEvent(juce::MidiMessage::pitchWheel(1, 16383), 0);
         processor.processBlock(output, midi);
         if (block >= 2) {
-            for (int sample = 0; sample < output.getNumSamples(); ++sample)
-                energy += static_cast<double>(output.getSample(0, sample)) * output.getSample(0, sample);
+            for (int sample = 0; sample < output.getNumSamples(); ++sample) {
+                const auto value = output.getSample(0, sample);
+                require(std::isfinite(value), "pitch-bent oscillator output must remain finite");
+                rendered.push_back(value);
+            }
         }
     }
 
     processor.releaseResources();
-    return energy;
+    return rendered;
 }
 }
 
 int main()
 {
-    const auto centeredPitchEnergy = renderPitchBend(false);
-    const auto bentPitchEnergy = renderPitchBend(true);
-    require(std::abs(centeredPitchEnergy - bentPitchEnergy) > 0.01,
+    const auto centeredPitch = renderPitchBend(false);
+    const auto bentPitch = renderPitchBend(true);
+    require(centeredPitch.size() == bentPitch.size(),
+        "pitch-bend renders must have equal lengths");
+    double pitchDifference = 0.0;
+    for (size_t sample = 0; sample < centeredPitch.size(); ++sample) {
+        const auto difference = centeredPitch[sample] - bentPitch[sample];
+        pitchDifference += static_cast<double>(difference) * difference;
+    }
+    require(pitchDifference > 0.1,
         "pitch wheel movement must alter the rendered oscillator frequency");
 
     WebPlaySynthAudioProcessor processor;
