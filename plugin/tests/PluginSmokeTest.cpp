@@ -96,6 +96,35 @@ int main()
     }
 
     require(std::isfinite(tailPeak) && tailPeak < 0.0001f, "released voice must eventually return to silence");
+
+    // The pitch input bus is optional and disabled by default, preserving the
+    // existing instrument's MIDI-only layout until a host explicitly routes it.
+    WebPlaySynthAudioProcessor inputProcessor;
+    require(!inputProcessor.getBus(true, 0)->isEnabled(), "pitch input bus must be disabled by default");
+    const auto defaultLayout = inputProcessor.getBusesLayout();
+    require(inputProcessor.checkBusesLayoutSupported(defaultLayout), "default disabled-input stereo-output layout must remain supported");
+    auto monoOutputLayout = defaultLayout;
+    monoOutputLayout.outputBuses.set(0, juce::AudioChannelSet::mono());
+    require(inputProcessor.checkBusesLayoutSupported(monoOutputLayout), "disabled-input mono-output layout must remain supported");
+    auto inputLayout = inputProcessor.getBusesLayout();
+    inputLayout.inputBuses.set(0, juce::AudioChannelSet::mono());
+    require(inputProcessor.setBusesLayout(inputLayout), "processor must accept an enabled mono pitch input bus");
+    inputProcessor.prepareToPlay(48000.0, 512);
+
+    juce::AudioBuffer<float> inputAndOutput(2, 512);
+    for (int sample = 0; sample < inputAndOutput.getNumSamples(); ++sample)
+        inputAndOutput.setSample(0, sample, 0.5f * std::sin(juce::MathConstants<float>::twoPi * 220.0f * sample / 48000.0f));
+    juce::MidiBuffer noMidi;
+    inputProcessor.processBlock(inputAndOutput, noMidi);
+
+    require(inputProcessor.getPitchInputRms() > 0.3f, "known mono input signal must reach the pitch input bus");
+    float inputTestOutputPeak = 0.0f;
+    for (int channel = 0; channel < inputAndOutput.getNumChannels(); ++channel)
+        for (int sample = 0; sample < inputAndOutput.getNumSamples(); ++sample)
+            inputTestOutputPeak = juce::jmax(inputTestOutputPeak, std::abs(inputAndOutput.getSample(channel, sample)));
+    require(inputTestOutputPeak < 0.000001f, "pitch input must not pass through to the synth output");
+    inputProcessor.releaseResources();
+
     processor.releaseResources();
 
     std::cout << "PASS: MIDI rendering, finite audio, patch state round-trip, and release-to-silence\n";

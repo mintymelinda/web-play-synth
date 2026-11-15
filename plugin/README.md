@@ -40,6 +40,12 @@ The native editor provides grouped oscillator, filter, envelope, LFO, output, gl
 
 The Linux CI job builds both VST3 and Standalone formats, runs a MIDI/audio/state smoke test, and publishes a downloadable `web-play-synth-linux-x86_64` artifact for 14 days.
 
+## Experimental pitch input bus
+
+The processor exposes an optional mono input bus named **Pitch Input**. It is disabled by default, so existing MIDI-only sessions retain their original input/output configuration. A host can enable and route a mono audio source to this bus while the instrument continues to render MIDI normally.
+
+This feasibility spike reports the routed input level internally for automated smoke testing; it does not yet perform pitch detection or generate notes from the input. Input audio is never passed through to the synth output. Real routing support still needs to be verified in REAPER and Bitwig or Ableton before the pitch-tracking implementation proceeds.
+
 ## Licensing
 
 JUCE is dual-licensed. Before distributing binaries, choose and comply with the JUCE licence that applies (including its AGPLv3 or commercial terms). The plugin's distribution terms must be compatible with that choice.
