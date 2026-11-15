@@ -179,10 +179,17 @@ void WebPlaySynthAudioProcessor::setCurrentProgram(int index)
     if (!juce::isPositiveAndBelow(index, getNumPrograms()))
         return;
     currentProgram.store(index, std::memory_order_relaxed);
-    for (const auto& item : factoryPresets()[static_cast<size_t>(index)].values) {
-        if (auto* parameter = parameters.getParameter(item.id))
-            parameter->setValueNotifyingHost(parameter->convertTo0to1(item.value));
-    }
+    // Start from a complete known baseline so selecting a preset never leaks
+    // values from whichever patch happened to be loaded before it.
+    const auto applyPreset = [this](const FactoryPreset& preset) {
+        for (const auto& item : preset.values) {
+            if (auto* parameter = parameters.getParameter(item.id))
+                parameter->setValueNotifyingHost(parameter->convertTo0to1(item.value));
+        }
+    };
+    applyPreset(factoryPresets().front());
+    if (index != 0)
+        applyPreset(factoryPresets()[static_cast<size_t>(index)]);
 }
 
 void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
