@@ -258,6 +258,32 @@ void WebPlaySynthAudioProcessor::setCurrentProgram(int index)
         applyPreset(factoryPresets()[static_cast<size_t>(index)]);
 }
 
+
+double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
+{
+    constexpr double silenceThreshold = 0.001; // -60 dB amplitude
+    const auto delayMix = parameters.getRawParameterValue("delayMix")->load();
+    const auto delayFeedback = parameters.getRawParameterValue("delayFeedback")->load();
+    const auto delayTime = parameters.getRawParameterValue("delayTime")->load();
+    const auto reverbMix = parameters.getRawParameterValue("reverbMix")->load();
+
+    double tailSeconds = 0.0;
+    if (delayMix > 0.0f) {
+        const auto feedback = static_cast<double>(juce::jlimit(0.0f, 0.85f, delayFeedback));
+        const auto repeats = feedback > 0.0
+            ? std::ceil(std::log(silenceThreshold) / std::log(feedback))
+            : 1.0;
+        tailSeconds += static_cast<double>(delayTime) * juce::jmax(1.0, repeats);
+    }
+
+    // JUCE's Freeverb network has no inexpensive exact decay-time query.
+    // Retain the engine's conservative eight-second allowance when enabled.
+    if (reverbMix > 0.0f)
+        tailSeconds += 8.0;
+
+    return tailSeconds;
+}
+
 void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;

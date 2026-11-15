@@ -351,6 +351,27 @@ int main()
         && processor.parameters.getRawParameterValue("lfoPanDepth")->load() == 0.0f,
         "Init must reset optional native audio paths to their neutral state");
 
+
+    // Hosts should receive the current effect tail, not an unconditional eight seconds.
+    WebPlaySynthAudioProcessor tailProcessor;
+    require(tailProcessor.getTailLengthSeconds() == 0.0,
+        "disabled delay and reverb must report no effect tail");
+    const auto setTailParameter = [&tailProcessor](const char* id,float value) {
+        auto* parameter=tailProcessor.parameters.getParameter(id);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    };
+    setTailParameter("delayMix",1.0f);
+    setTailParameter("delayTime",0.2f);
+    setTailParameter("delayFeedback",0.0f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-0.2) < 0.001,
+        "single-repeat delay must report one delay interval");
+    setTailParameter("delayFeedback",0.5f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-2.0) < 0.001,
+        "delay tail must account for repeats down to -60 dB");
+    setTailParameter("reverbMix",0.4f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-10.0) < 0.001,
+        "combined delay and reverb tails must be additive");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
