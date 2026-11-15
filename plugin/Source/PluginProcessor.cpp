@@ -120,14 +120,15 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
             // The browser engine builds a saw-shaped PeriodicWave from the
             // oscillator frequency ratio, overriding VCO 2's selected waveform.
             const auto syncRatio=juce::jlimit(0.25,8.0,base2/base1);
-            const auto syncPhase=phase1[static_cast<size_t>(layer)]*syncRatio;
+            const auto syncMasterFrequency=juce::jlimit(10.0,20000.0,base1+mod);
+            const auto syncPhase=phase2[static_cast<size_t>(layer)]*syncRatio;
             const auto wrappedSyncPhase=syncPhase-std::floor(syncPhase);
-            const auto syncIncrement=juce::jlimit(0.0001,0.49,syncRatio*f1/sr);
+            const auto syncIncrement=juce::jlimit(0.0001,0.49,syncRatio*syncMasterFrequency/sr);
             s2=oscillatorSample(wrappedSyncPhase,syncIncrement,2);
             const auto masterResetFraction=syncRatio-std::floor(syncRatio);
-            const auto masterIncrement=juce::jlimit(0.0001,0.49,f1/sr);
+            const auto masterIncrement=juce::jlimit(0.0001,0.49,syncMasterFrequency/sr);
             s2-=static_cast<float>(masterResetFraction)
-                * WebPlaySynthAudioProcessor::polyBlep(phase1[static_cast<size_t>(layer)],masterIncrement);
+                * WebPlaySynthAudioProcessor::polyBlep(phase2[static_cast<size_t>(layer)],masterIncrement);
         } else {
             s2=oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave);
         }
@@ -137,10 +138,11 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         const auto s1=oscillatorSample(oldPhase,increment1,p.osc1Wave);
         phase1[static_cast<size_t>(layer)]+=increment1;
         if(phase1[static_cast<size_t>(layer)]>=1) phase1[static_cast<size_t>(layer)]-=std::floor(phase1[static_cast<size_t>(layer)]);
-        if (!p.hardSync) {
-            phase2[static_cast<size_t>(layer)]+=inc2;
-            if(phase2[static_cast<size_t>(layer)]>=1) phase2[static_cast<size_t>(layer)]-=std::floor(phase2[static_cast<size_t>(layer)]);
-        }
+        const auto phase2Increment = p.hardSync
+            ? juce::jlimit(10.0,20000.0,base1+mod)/sr
+            : inc2;
+        phase2[static_cast<size_t>(layer)]+=phase2Increment;
+        if(phase2[static_cast<size_t>(layer)]>=1) phase2[static_cast<size_t>(layer)]-=std::floor(phase2[static_cast<size_t>(layer)]);
 
         const auto oscillatorMix=s1*p.osc1Level*(p.vco1Enabled?1.0f:0.0f)
             +s2*p.osc2Level*(p.vco2Enabled?1.0f:0.0f);
