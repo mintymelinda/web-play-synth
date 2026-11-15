@@ -10,7 +10,7 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
     static const juce::StringArray ids {
         "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
         "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
-        "cutoff", "resonance", "filterContour", "filterAttack", "filterDecay",
+        "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
         "master", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
@@ -44,6 +44,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     f("osc2Octave","VCO 2 Octave",-2,2,0,1); f("osc2Tune","VCO 2 Tune",-12,12,7,1); f("osc2Level","VCO 2 Level",0,1,.38f);
     b("hardSync","VCO 2 Hard Sync",false); f("crossMod","VCO Cross Modulation",0,800,0,.1f);
     f("cutoff","Filter Cutoff",30,18000,1800,1,1200); f("resonance","Filter Resonance",.1f,18,.8f,.01f); f("filterContour","Filter Contour",0,1,.55f);
+    c("filterType","Filter Mode",{ "Low-pass", "High-pass", "Band-pass" },0); f("filterDrive","Filter Drive",0,24,0,.1f);
     f("filterAttack","Filter Envelope Attack",.005f,4,.025f,.001f); f("filterDecay","Filter Envelope Decay",.005f,5,.42f,.001f); f("filterSustain","Filter Envelope Sustain",0,1,.32f); f("filterRelease","Filter Envelope Release",.005f,6,.38f,.001f);
     f("ampAttack","Amp Envelope Attack",.005f,4,.015f,.001f); f("ampDecay","Amp Envelope Decay",.005f,5,.25f,.001f); f("ampSustain","Amp Envelope Sustain",0,1,.78f); f("ampRelease","Amp Envelope Release",.005f,6,.32f,.001f);
     c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1);
@@ -55,7 +56,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
 void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
 {
     filter.prepare({sr,static_cast<juce::uint32>(block),1});
-    filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass); filter.reset();
+    filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass); filter.reset(); currentFilterType=0;
     ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
 }
 void WebPlaySynthAudioProcessor::Voice::start(int n,float vel,const Parameters& p,double previous)
@@ -77,6 +78,13 @@ float WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr)
     if(!keyDown && !ampEnvelope.isActive()) { active=false; note=-1; return 0; }
     const auto glide=p.glideEnabled ? 1.0-std::exp(-1.0/(static_cast<double>(p.glideTime)*sr)) : 1.0;
     currentFrequency+=(targetFrequency-currentFrequency)*glide;
+    if (currentFilterType != p.filterType) {
+        const auto type = p.filterType == 1 ? juce::dsp::StateVariableTPTFilterType::highpass
+            : p.filterType == 2 ? juce::dsp::StateVariableTPTFilterType::bandpass
+                                : juce::dsp::StateVariableTPTFilterType::lowpass;
+        filter.setType(type);
+        currentFilterType = p.filterType;
+    }
     const auto base1=currentFrequency*std::pow(2.0,(p.osc1Octave*12.0+p.osc1Tune)/12.0);
     const auto base2=currentFrequency*std::pow(2.0,(p.osc2Octave*12.0+p.osc2Tune)/12.0);
     const auto lfo=waveformSample(lfoPhase,p.lfoWave); lfoPhase+=p.lfoRate/sr; if(lfoPhase>=1) lfoPhase-=std::floor(lfoPhase);
@@ -94,7 +102,9 @@ float WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr)
     const auto env=p.filterEnvEnabled?filterEnvelope.getNextSample():0.0f;
     const auto cutoff=juce::jlimit(30.0f,19000.0f,p.cutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
     filter.setCutoffFrequency(cutoff); filter.setResonance(p.resonance);
-    return filter.processSample(0,mix)*amp*velocity;
+    const auto driveGain = std::pow(10.0f, p.filterDrive / 20.0f);
+    const auto drivenMix = p.filterDrive > 0.0f ? std::tanh(mix * driveGain) : mix;
+    return filter.processSample(0,drivenMix)*amp*velocity;
 }
 
 
@@ -218,6 +228,7 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.osc1Wave=juce::roundToInt(v("osc1Wave")); p.osc2Wave=juce::roundToInt(v("osc2Wave")); p.osc1Octave=v("osc1Octave"); p.osc1Tune=v("osc1Tune"); p.osc1Level=v("osc1Level");
     p.osc2Octave=v("osc2Octave"); p.osc2Tune=v("osc2Tune"); p.osc2Level=v("osc2Level"); p.hardSync=v("hardSync")>.5f; p.crossMod=v("crossMod");
     p.cutoff=v("cutoff"); p.resonance=v("resonance"); p.filterContour=v("filterContour");
+    p.filterType=juce::roundToInt(v("filterType")); p.filterDrive=v("filterDrive");
     p.filterAttack=v("filterAttack"); p.filterDecay=v("filterDecay"); p.filterSustain=v("filterSustain"); p.filterRelease=v("filterRelease");
     p.ampAttack=v("ampAttack"); p.ampDecay=v("ampDecay"); p.ampSustain=v("ampSustain"); p.ampRelease=v("ampRelease");
     p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth");
