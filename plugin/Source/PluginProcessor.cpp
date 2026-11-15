@@ -14,7 +14,7 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
         "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
-        "filterEnvEnabled", "ampEnvEnabled"
+        "filterEnvEnabled", "ampEnvEnabled", "aftertouchDepth"
     };
     return ids;
 }
@@ -43,7 +43,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     f("osc1Octave","VCO 1 Octave",-2,2,0,1); f("osc1Tune","VCO 1 Tune",-12,12,0,1); f("osc1Level","VCO 1 Level",0,1,.72f); f("osc1PulseWidth","VCO 1 Pulse Width",.05f,.95f,.5f,.001f);
     f("osc2Octave","VCO 2 Octave",-2,2,0,1); f("osc2Tune","VCO 2 Tune",-12,12,7,1); f("osc2Level","VCO 2 Level",0,1,.38f); f("osc2PulseWidth","VCO 2 Pulse Width",.05f,.95f,.5f,.001f);
     b("hardSync","VCO 2 Hard Sync",false); f("crossMod","VCO Cross Modulation",0,800,0,.1f);
-    f("cutoff","Filter Cutoff",30,18000,1800,1,1200); f("resonance","Filter Resonance",.1f,18,.8f,.01f); f("filterContour","Filter Contour",0,1,.55f);
+    f("cutoff","Filter Cutoff",30,18000,1800,1,1200); f("resonance","Filter Resonance",.1f,18,.8f,.01f); f("filterContour","Filter Contour",0,1,.55f); f("aftertouchDepth","Aftertouch Depth",0,1,0,.01f);
     c("filterType","Filter Mode",{ "Low-pass", "High-pass", "Band-pass" },0); f("filterDrive","Filter Drive",0,24,0,.1f);
     f("filterAttack","Filter Envelope Attack",.005f,4,.025f,.001f); f("filterDecay","Filter Envelope Decay",.005f,5,.42f,.001f); f("filterSustain","Filter Envelope Sustain",0,1,.32f); f("filterRelease","Filter Envelope Release",.005f,6,.38f,.001f);
     f("ampAttack","Amp Envelope Attack",.005f,4,.015f,.001f); f("ampDecay","Amp Envelope Decay",.005f,5,.25f,.001f); f("ampSustain","Amp Envelope Sustain",0,1,.78f); f("ampRelease","Amp Envelope Release",.005f,6,.32f,.001f);
@@ -69,12 +69,13 @@ void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
     ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
 }
 void WebPlaySynthAudioProcessor::Voice::start(
-    int n, float vel, int channel, float pitchBend, const Parameters& p, double previous)
+    int n, float vel, int channel, float pitchBend, float pressure, const Parameters& p, double previous)
 {
     note=n;
     velocity=vel;
     midiChannel=juce::jlimit(1, 16, channel);
     pitchBendSemitones=pitchBend;
+    aftertouch=pressure;
     keyDown=true;
     sustainHeld=false;
     active=true;
@@ -199,8 +200,9 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     for (auto& filter : filters)
         filter.setCutoffFrequency(cutoff);
     const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
-    left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity;
-    right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity;
+    const auto pressureGain=1.0f+juce::jlimit(0.0f,1.0f,aftertouch)*p.aftertouchDepth;
+    left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity*pressureGain;
+    right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity*pressureGain;
 }
 
 
@@ -214,7 +216,7 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc1Octave", 0 }, { "osc1Tune", 0 },
             { "osc1Level", .72f }, { "osc1PulseWidth", .5f }, { "osc2Octave", 0 }, { "osc2Tune", 7 }, { "osc2Level", .38f }, { "osc2PulseWidth", .5f },
             { "hardSync", 0 }, { "crossMod", 0 }, { "cutoff", 1800 }, { "resonance", .8f },
-            { "filterContour", .55f }, { "filterType", 0 }, { "filterDrive", 0 },
+            { "filterContour", .55f }, { "filterType", 0 }, { "filterDrive", 0 }, { "aftertouchDepth", 0 },
             { "filterAttack", .025f }, { "filterDecay", .42f },
             { "filterSustain", .32f }, { "filterRelease", .38f }, { "ampAttack", .015f },
             { "ampDecay", .25f }, { "ampSustain", .78f }, { "ampRelease", .32f },
@@ -365,6 +367,7 @@ void WebPlaySynthAudioProcessor::releaseResources()
 {
     for(auto& v:voices) { v.active=false; v.keyDown=false; v.sustainHeld=false; }
     channelPitchBendSemitones.fill(0.0f);
+    channelAftertouch.fill(0.0f);
     sustainPedalDown.fill(false);
     reverb.reset();
     std::fill(chorusBufferLeft.begin(),chorusBufferLeft.end(),0.0f);
@@ -395,7 +398,7 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.osc1Wave=juce::roundToInt(v("osc1Wave")); p.osc2Wave=juce::roundToInt(v("osc2Wave")); p.osc1Octave=v("osc1Octave"); p.osc1Tune=v("osc1Tune"); p.osc1Level=v("osc1Level"); p.osc1PulseWidth=v("osc1PulseWidth");
     p.osc2Octave=v("osc2Octave"); p.osc2Tune=v("osc2Tune"); p.osc2Level=v("osc2Level"); p.osc2PulseWidth=v("osc2PulseWidth"); p.hardSync=v("hardSync")>.5f; p.crossMod=v("crossMod");
     p.cutoff=v("cutoff"); p.resonance=v("resonance"); p.filterContour=v("filterContour");
-    p.filterType=juce::roundToInt(v("filterType")); p.filterDrive=v("filterDrive");
+    p.filterType=juce::roundToInt(v("filterType")); p.filterDrive=v("filterDrive"); p.aftertouchDepth=v("aftertouchDepth");
     p.filterAttack=v("filterAttack"); p.filterDecay=v("filterDecay"); p.filterSustain=v("filterSustain"); p.filterRelease=v("filterRelease");
     p.ampAttack=v("ampAttack"); p.ampDecay=v("ampDecay"); p.ampSustain=v("ampSustain"); p.ampRelease=v("ampRelease");
     p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth"); p.lfoAmpDepth=v("lfoAmpDepth"); p.lfoPanDepth=v("lfoPanDepth"); p.lfoPulseDepth=v("lfoPulseDepth");
@@ -621,10 +624,12 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
         if (cc == 121) {
             sustainPedalDown[channelIndex]=false;
             channelPitchBendSemitones[channelIndex]=0.0f;
+            channelAftertouch[channelIndex]=0.0f;
             for (auto& voice : voices) {
                 if (voice.active && voice.midiChannel == channel) {
                     voice.targetFrequency=juce::MidiMessage::getMidiNoteInHertz(voice.note);
                     voice.pitchBendSemitones=0.0f;
+                    voice.aftertouch=0.0f;
                     if (voice.sustainHeld)
                         voice.release();
                 }
@@ -651,6 +656,25 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
             if (auto* parameter = parameters.getParameter(midiCcParameterIds()[parameterIndex]))
                 parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
         }
+        return;
+    }
+
+    if (m.isChannelPressure()) {
+        const auto channel = juce::jlimit(1, 16, m.getChannel());
+        const auto pressure = static_cast<float>(m.getChannelPressureValue()) / 127.0f;
+        channelAftertouch[static_cast<size_t>(channel - 1)] = pressure;
+        for (auto& voice : voices)
+            if (voice.active && voice.midiChannel == channel)
+                voice.aftertouch = pressure;
+        return;
+    }
+
+    if (m.isAftertouch()) {
+        const auto channel = juce::jlimit(1, 16, m.getChannel());
+        const auto pressure = static_cast<float>(m.getAfterTouchValue()) / 127.0f;
+        for (auto& voice : voices)
+            if (voice.active && voice.midiChannel == channel && voice.note == m.getNoteNumber())
+                voice.aftertouch = pressure;
         return;
     }
 
@@ -723,7 +747,8 @@ void WebPlaySynthAudioProcessor::startNote(int n, float vel, int channel, const 
     const auto bend = channelPitchBendSemitones[static_cast<size_t>(safeChannel - 1)];
     auto* voice = findVoiceToStart();
     voice->age=++voiceAge;
-    voice->start(n, vel, safeChannel, bend, p, lastPlayedFrequency);
+    voice->start(n, vel, safeChannel, bend,
+        channelAftertouch[static_cast<size_t>(safeChannel - 1)], p, lastPlayedFrequency);
     lastPlayedFrequency=juce::MidiMessage::getMidiNoteInHertz(n);
 }
 void WebPlaySynthAudioProcessor::stopNote(int n, int channel)
