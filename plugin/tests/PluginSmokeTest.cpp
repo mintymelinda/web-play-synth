@@ -317,6 +317,15 @@ int main()
     require(autoPan[3]>autoPan[2]*2.0 && autoPan[4]>autoPan[5]*2.0,
         "LFO pan depth must move the voice from right to left across the stereo field");
 
+    processor.setCurrentProgram(5);
+    require(std::abs(processor.parameters.getRawParameterValue("osc2PulseWidth")->load()-0.25f)<0.001f
+        && std::abs(processor.parameters.getRawParameterValue("lfoPulseDepth")->load()-0.22f)<0.001f,
+        "PWM Motion must select a narrow pulse and an active pulse-width modulation route");
+    processor.setCurrentProgram(0);
+    require(processor.parameters.getRawParameterValue("osc2PulseWidth")->load()==0.5f
+        && processor.parameters.getRawParameterValue("lfoPulseDepth")->load()==0.0f,
+        "Init must reset pulse-width modulation to its neutral baseline");
+
     // Factory patches exercise the newly implemented native audio paths.
     require(processor.getNumPrograms() == 8, "native instrument must expose eight factory programs");
     require(processor.getProgramName(0) == "Init", "first factory program must be Init");
@@ -488,6 +497,55 @@ int main()
         "chorus depth and mix must alter the actual rendered voice signal");
     require(chorusStereoDifference>0.001,
         "stereo chorus must modulate the two output channels independently");
+
+    // Pulse-width control changes the band-limited square wave; LFO depth animates it.
+    const auto renderPulseWidth = [](float width,float pulseDepth) {
+        WebPlaySynthAudioProcessor pwmProcessor;
+        pwmProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&pwmProcessor](const char* id,float value) {
+            auto* parameter=pwmProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Level",0.0f);
+        setPlain("osc2Level",1.0f);
+        setPlain("osc2Wave",3.0f);
+        setPlain("osc2PulseWidth",width);
+        setPlain("lfoWave",0.0f);
+        setPlain("lfoRate",2.0f);
+        setPlain("lfoPulseDepth",pulseDepth);
+        setPlain("hardSync",0.0f);
+        setPlain("crossMod",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer pwmMidi;
+        for(int block=0;block<120;++block) {
+            pwmMidi.clear();
+            if(block==0) pwmMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            pwmProcessor.processBlock(output,pwmMidi);
+        }
+        std::array<float,512> samples {};
+        for(int sample=0;sample<output.getNumSamples();++sample)
+            samples[static_cast<size_t>(sample)]=output.getSample(0,sample);
+        pwmProcessor.releaseResources();
+        return samples;
+    };
+    const auto halfPulse=renderPulseWidth(0.5f,0.0f);
+    const auto narrowPulse=renderPulseWidth(0.25f,0.0f);
+    const auto animatedPulse=renderPulseWidth(0.5f,0.3f);
+    double widthDifference=0.0,pwmDifference=0.0;
+    for(size_t sample=0;sample<halfPulse.size();++sample) {
+        const auto widthDelta=halfPulse[sample]-narrowPulse[sample];
+        const auto pwmDelta=halfPulse[sample]-animatedPulse[sample];
+        widthDifference+=widthDelta*widthDelta;
+        pwmDifference+=pwmDelta*pwmDelta;
+    }
+    require(widthDifference>0.01,
+        "oscillator pulse width must change the rendered square-wave duty cycle");
+    require(pwmDifference>0.01,
+        "LFO pulse-width depth must animate the oscillator duty cycle");
 
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
