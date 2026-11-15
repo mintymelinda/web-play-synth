@@ -39,6 +39,25 @@ int main()
     const auto restoredCutoff = processor.parameters.getRawParameterValue("cutoff")->load();
     require(std::abs(originalCutoff - restoredCutoff) < 0.01f, "plugin state must restore parameter values");
 
+    // Factory programs expose useful patches and apply values through the host
+    // parameter interface rather than bypassing automation.
+    require(processor.getNumPrograms() == 8, "native instrument must expose eight factory programs");
+    require(processor.getProgramName(0) == "Init", "first factory program must be Init");
+    processor.setCurrentProgram(3);
+    require(processor.getCurrentProgram() == 3, "program selection must update the current index");
+    require(processor.parameters.getRawParameterValue("cutoff")->load() < 700.0f,
+        "Deep Bass must apply its low filter cutoff");
+    juce::MemoryBlock presetState;
+    processor.getStateInformation(presetState);
+    WebPlaySynthAudioProcessor presetRestored;
+    presetRestored.setStateInformation(presetState.getData(), static_cast<int>(presetState.getSize()));
+    require(presetRestored.getCurrentProgram() == 3, "current factory program must survive state restore");
+    require(presetRestored.parameters.getRawParameterValue("cutoff")->load() < 700.0f,
+        "preset parameter values must survive state restore");
+    processor.setCurrentProgram(0);
+    require(processor.parameters.getRawParameterValue("cutoff")->load() > 1700.0f,
+        "Init program must restore its default filter cutoff");
+
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.
     processor.setMidiCcLearnTarget("cutoff");
