@@ -39,25 +39,6 @@ int main()
     const auto restoredCutoff = processor.parameters.getRawParameterValue("cutoff")->load();
     require(std::abs(originalCutoff - restoredCutoff) < 0.01f, "plugin state must restore parameter values");
 
-    // Factory programs expose useful patches and apply values through the host
-    // parameter interface rather than bypassing automation.
-    require(processor.getNumPrograms() == 8, "native instrument must expose eight factory programs");
-    require(processor.getProgramName(0) == "Init", "first factory program must be Init");
-    processor.setCurrentProgram(3);
-    require(processor.getCurrentProgram() == 3, "program selection must update the current index");
-    require(processor.parameters.getRawParameterValue("cutoff")->load() < 700.0f,
-        "Deep Bass must apply its low filter cutoff");
-    juce::MemoryBlock presetState;
-    processor.getStateInformation(presetState);
-    WebPlaySynthAudioProcessor presetRestored;
-    presetRestored.setStateInformation(presetState.getData(), static_cast<int>(presetState.getSize()));
-    require(presetRestored.getCurrentProgram() == 3, "current factory program must survive state restore");
-    require(presetRestored.parameters.getRawParameterValue("cutoff")->load() < 700.0f,
-        "preset parameter values must survive state restore");
-    processor.setCurrentProgram(0);
-    require(processor.parameters.getRawParameterValue("cutoff")->load() > 1700.0f,
-        "Init program must restore its default filter cutoff");
-
 
     // The native filter exposes three functioning topologies, not cosmetic modes.
     const auto renderFilterTone = [](int filterMode, float filterDrive) {
@@ -111,6 +92,61 @@ int main()
     require(driveDifference > 0.001f,
         "filter drive must alter the actual pre-filter audio signal");
 
+
+    // Internal unison layers detune the oscillator pairs and create a real stereo field.
+    const auto renderUnison = [](float voiceMode, float detune, float spread) {
+        WebPlaySynthAudioProcessor unisonProcessor;
+        unisonProcessor.prepareToPlay(48000.0, 512);
+        auto setPlain = [&unisonProcessor](const char* id, float value) {
+            auto* parameter = unisonProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave", 0.0f);
+        setPlain("osc1Level", 1.0f);
+        setPlain("osc2Level", 0.0f);
+        setPlain("unisonVoices", voiceMode);
+        setPlain("unisonDetune", detune);
+        setPlain("stereoSpread", spread);
+        setPlain("ampEnvEnabled", 0.0f);
+        setPlain("filterEnvEnabled", 0.0f);
+        juce::AudioBuffer<float> tone(2, 512);
+        juce::MidiBuffer toneMidi;
+        for (int block = 0; block < 96; ++block) {
+            toneMidi.clear();
+            if (block == 0)
+                toneMidi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.8f), 0);
+            unisonProcessor.processBlock(tone, toneMidi);
+        }
+        std::array<float, 512> leftSamples {}, rightSamples {};
+        for (int sample = 0; sample < tone.getNumSamples(); ++sample) {
+            leftSamples[static_cast<size_t>(sample)] = tone.getSample(0, sample);
+            rightSamples[static_cast<size_t>(sample)] = tone.getSample(1, sample);
+        }
+        unisonProcessor.releaseResources();
+        return std::pair { leftSamples, rightSamples };
+    };
+    const auto singleVoice = renderUnison(0.0f, 0.0f, 0.0f);
+    const auto stackedVoices = renderUnison(2.0f, 20.0f, 0.0f);
+    float unisonDifference = 0.0f;
+    float monoStereoDifference = 0.0f;
+    for (size_t sample = 0; sample < singleVoice.first.size(); ++sample) {
+        const auto difference = stackedVoices.first[sample] - singleVoice.first[sample];
+        unisonDifference += difference * difference;
+        const auto channelDifference = singleVoice.first[sample] - singleVoice.second[sample];
+        monoStereoDifference += channelDifference * channelDifference;
+    }
+    require(unisonDifference > 0.001f, "detuned unison voices must change the rendered oscillator signal");
+    require(monoStereoDifference < 0.000001f, "one unison voice with zero spread must retain centered mono imaging");
+
+    const auto spreadVoices = renderUnison(2.0f, 20.0f, 1.0f);
+    float stereoImageDifference = 0.0f;
+    for (size_t sample = 0; sample < spreadVoices.first.size(); ++sample) {
+        const auto difference = spreadVoices.first[sample] - spreadVoices.second[sample];
+        stereoImageDifference += difference * difference;
+    }
+    require(stereoImageDifference > 0.001f, "stereo spread must pan detuned unison layers across the output channels");
+
+
     // Delay and reverb must continue producing audio after the dry voice releases.
     const auto renderEffectTail = [](float delayMix, float reverbMix) {
         WebPlaySynthAudioProcessor effectsProcessor;
@@ -119,28 +155,433 @@ int main()
             auto* parameter = effectsProcessor.parameters.getParameter(id);
             parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
         };
-        setPlain("delayTime", 0.2f); setPlain("delayFeedback", 0.65f); setPlain("delayMix", delayMix);
-        setPlain("reverbMix", reverbMix); setPlain("reverbRoom", 0.8f); setPlain("reverbDamping", 0.2f);
+        setPlain("delayTime", 0.2f);
+        setPlain("delayFeedback", 0.65f);
+        setPlain("delayMix", delayMix);
+        setPlain("reverbMix", reverbMix);
+        setPlain("reverbRoom", 0.8f);
+        setPlain("reverbDamping", 0.2f);
         juce::AudioBuffer<float> effected(2, 512);
         juce::MidiBuffer effectMidi;
         float tailPeak=0.0f;
         for (int block=0; block<160; ++block) {
             effectMidi.clear();
-            if (block==0) effectMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
-            if (block==96) effectMidi.addEvent(juce::MidiMessage::noteOff(1,60),0);
+            if (block==0)
+                effectMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            if (block==96)
+                effectMidi.addEvent(juce::MidiMessage::noteOff(1,60),0);
             effectsProcessor.processBlock(effected,effectMidi);
-            if (block>=140) for (int ch=0; ch<effected.getNumChannels(); ++ch)
-                for (int sample=0; sample<effected.getNumSamples(); ++sample)
-                    tailPeak=juce::jmax(tailPeak,std::abs(effected.getSample(ch,sample)));
+            if (block>=140)
+                for (int channel=0; channel<effected.getNumChannels(); ++channel)
+                    for (int sample=0; sample<effected.getNumSamples(); ++sample)
+                        tailPeak=juce::jmax(tailPeak,std::abs(effected.getSample(channel,sample)));
         }
-        effectsProcessor.releaseResources(); return tailPeak;
+        effectsProcessor.releaseResources();
+        return tailPeak;
     };
-    const auto dryTail=renderEffectTail(0.0f,0.0f);
-    const auto delayTail=renderEffectTail(1.0f,0.0f);
-    const auto reverbTail=renderEffectTail(0.0f,0.8f);
-    require(dryTail<0.0001f,"dry signal must release to silence when effects are disabled");
-    require(delayTail>0.0001f,"delay feedback must create an audible tail after note-off");
-    require(reverbTail>0.0001f,"reverb must create an audible tail after note-off");
+    const auto dryTail = renderEffectTail(0.0f, 0.0f);
+    const auto delayTail = renderEffectTail(1.0f, 0.0f);
+    const auto reverbTail = renderEffectTail(0.0f, 0.8f);
+    require(dryTail < 0.0001f, "dry signal must release to silence when effects are disabled");
+    require(delayTail > 0.0001f, "delay feedback must create an audible tail after note-off");
+    require(reverbTail > 0.0001f, "reverb must create an audible tail after note-off");
+
+
+    // Portamento time is the time to reach the destination, not merely one time constant.
+    const auto estimatePitch = [](const std::vector<float>& samples) {
+        std::vector<double> crossings;
+        for (size_t index=1; index<samples.size(); ++index) {
+            const auto previous=samples[index-1];
+            const auto current=samples[index];
+            if (previous<=0.0f && current>0.0f) {
+                const auto fraction=static_cast<double>(-previous)/(static_cast<double>(current)-previous);
+                crossings.push_back(static_cast<double>(index-1)+fraction);
+            }
+        }
+        if (crossings.size()<2) return 0.0;
+        return static_cast<double>(crossings.size()-1)*48000.0/(crossings.back()-crossings.front());
+    };
+    WebPlaySynthAudioProcessor glideProcessor;
+    glideProcessor.prepareToPlay(48000.0,512);
+    const auto setGlideParameter=[&glideProcessor](const char* id,float value) {
+        auto* parameter=glideProcessor.parameters.getParameter(id);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    };
+    setGlideParameter("osc1Wave",0.0f);
+    setGlideParameter("osc1Level",1.0f);
+    setGlideParameter("osc2Level",0.0f);
+    setGlideParameter("cutoff",18000.0f);
+    setGlideParameter("resonance",0.1f);
+    setGlideParameter("filterEnvEnabled",0.0f);
+    setGlideParameter("ampAttack",0.005f);
+    setGlideParameter("ampDecay",0.005f);
+    setGlideParameter("ampSustain",1.0f);
+    setGlideParameter("ampRelease",0.01f);
+    setGlideParameter("glideEnabled",1.0f);
+    setGlideParameter("glideTime",0.1f);
+    juce::AudioBuffer<float> glideAudio(2,512);
+    juce::MidiBuffer glideMidi;
+    glideMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+    glideProcessor.processBlock(glideAudio,glideMidi);
+    glideMidi.clear();
+    glideMidi.addEvent(juce::MidiMessage::noteOff(1,60),0);
+    for(int block=0;block<20;++block) glideProcessor.processBlock(glideAudio,glideMidi);
+    glideMidi.clear();
+    glideMidi.addEvent(juce::MidiMessage::noteOn(1,72,0.8f),0);
+    glideProcessor.processBlock(glideAudio,glideMidi);
+    std::vector<float> middleGlide;
+    std::vector<float> settledGlide;
+    for(int block=1;block<=12;++block) {
+        glideMidi.clear();
+        glideProcessor.processBlock(glideAudio,glideMidi);
+        if(block>=1 && block<=4)
+            for(int sample=0;sample<glideAudio.getNumSamples();++sample)
+                middleGlide.push_back(glideAudio.getSample(0,sample));
+        if(block>=9)
+            for(int sample=0;sample<glideAudio.getNumSamples();++sample)
+                settledGlide.push_back(glideAudio.getSample(0,sample));
+    }
+    const auto middleFrequency=estimatePitch(middleGlide);
+    const auto settledFrequency=estimatePitch(settledGlide);
+    require(middleFrequency>300.0 && middleFrequency<510.0,
+        "native glide must produce intermediate pitches during its configured transition");
+    require(settledFrequency>510.0 && settledFrequency<536.0,
+        "native glide must reach the target note within its configured duration");
+    glideProcessor.releaseResources();
+
+
+    // The LFO has real amplitude and stereo-pan destinations in addition to pitch/filter.
+    const auto renderLfoRoutes = [](float ampDepth,float panDepth) {
+        WebPlaySynthAudioProcessor lfoProcessor;
+        lfoProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&lfoProcessor](const char* id,float value) {
+            auto* parameter=lfoProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave",0.0f);
+        setPlain("osc1Level",1.0f);
+        setPlain("osc2Level",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        setPlain("lfoWave",0.0f);
+        setPlain("lfoRate",5.0f);
+        setPlain("lfoAmpDepth",ampDepth);
+        setPlain("lfoPanDepth",panDepth);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer routeMidi;
+        double highAmpEnergy=0.0,lowAmpEnergy=0.0;
+        double rightEarlyEnergy=0.0,leftEarlyEnergy=0.0;
+        double rightLateEnergy=0.0,leftLateEnergy=0.0;
+        int ampSamples=0,panSamples=0;
+        for(int block=0;block<18;++block) {
+            routeMidi.clear();
+            if(block==0) routeMidi.addEvent(juce::MidiMessage::noteOn(1,69,0.8f),0);
+            lfoProcessor.processBlock(output,routeMidi);
+            for(int sample=0;sample<output.getNumSamples();++sample) {
+                const auto left=output.getSample(0,sample);
+                const auto right=output.getSample(1,sample);
+                if(block>=2 && block<=3) {
+                    highAmpEnergy+=static_cast<double>(left)*left+static_cast<double>(right)*right;
+                    ++ampSamples;
+                }
+                if(block>=13 && block<=14) {
+                    lowAmpEnergy+=static_cast<double>(left)*left+static_cast<double>(right)*right;
+                }
+                if(block>=4 && block<=5) {
+                    leftEarlyEnergy+=static_cast<double>(left)*left;
+                    rightEarlyEnergy+=static_cast<double>(right)*right;
+                    ++panSamples;
+                }
+                if(block>=13 && block<=14) {
+                    leftLateEnergy+=static_cast<double>(left)*left;
+                    rightLateEnergy+=static_cast<double>(right)*right;
+                }
+            }
+        }
+        lfoProcessor.releaseResources();
+        return std::array<double,6> {
+            std::sqrt(highAmpEnergy/(2.0*ampSamples)),
+            std::sqrt(lowAmpEnergy/(2.0*ampSamples)),
+            std::sqrt(leftEarlyEnergy/panSamples),
+            std::sqrt(rightEarlyEnergy/panSamples),
+            std::sqrt(leftLateEnergy/panSamples),
+            std::sqrt(rightLateEnergy/panSamples)
+        };
+    };
+    const auto tremolo=renderLfoRoutes(1.0f,0.0f);
+    require(tremolo[0]>tremolo[1]*4.0,
+        "LFO amplitude depth must create audible tremolo in the voice output");
+    const auto autoPan=renderLfoRoutes(0.0f,1.0f);
+    require(autoPan[3]>autoPan[2]*2.0 && autoPan[4]>autoPan[5]*2.0,
+        "LFO pan depth must move the voice from right to left across the stereo field");
+
+    processor.setCurrentProgram(5);
+    require(std::abs(processor.parameters.getRawParameterValue("osc2PulseWidth")->load()-0.25f)<0.001f
+        && std::abs(processor.parameters.getRawParameterValue("lfoPulseDepth")->load()-0.22f)<0.001f,
+        "PWM Motion must select a narrow pulse and an active pulse-width modulation route");
+    processor.setCurrentProgram(0);
+    require(processor.parameters.getRawParameterValue("osc2PulseWidth")->load()==0.5f
+        && processor.parameters.getRawParameterValue("lfoPulseDepth")->load()==0.0f,
+        "Init must reset pulse-width modulation to its neutral baseline");
+
+    // Factory patches exercise the newly implemented native audio paths.
+    require(processor.getNumPrograms() == 8, "native instrument must expose eight factory programs");
+    require(processor.getProgramName(0) == "Init", "first factory program must be Init");
+    processor.setCurrentProgram(3);
+    require(processor.getCurrentProgram() == 3, "program selection must update the current index");
+    require(processor.parameters.getRawParameterValue("cutoff")->load() < 700.0f,
+        "Deep Bass must apply its low filter cutoff");
+    processor.setCurrentProgram(4);
+    require(static_cast<int>(std::round(processor.parameters.getRawParameterValue("filterType")->load())) == 2,
+        "Glass Pluck must select the implemented band-pass filter");
+    require(processor.parameters.getRawParameterValue("delayMix")->load() > 0.15f
+        && processor.parameters.getRawParameterValue("reverbMix")->load() > 0.2f,
+        "Glass Pluck must enable the delay and reverb audio paths");
+    processor.setCurrentProgram(7);
+    require(static_cast<int>(std::round(processor.parameters.getRawParameterValue("unisonVoices")->load())) == 2,
+        "Slow Atmosphere must select four-layer unison");
+    require(processor.parameters.getRawParameterValue("lfoPanDepth")->load() > 0.4f
+        && processor.parameters.getRawParameterValue("reverbMix")->load() > 0.6f,
+        "Slow Atmosphere must use LFO pan and reverb destinations");
+    juce::MemoryBlock presetState;
+    processor.getStateInformation(presetState);
+    WebPlaySynthAudioProcessor presetRestored;
+    presetRestored.setStateInformation(presetState.getData(), static_cast<int>(presetState.getSize()));
+    require(presetRestored.getCurrentProgram() == 7, "current factory program must survive state restore");
+    require(presetRestored.parameters.getRawParameterValue("reverbMix")->load() > 0.6f,
+        "new audio-path preset parameters must survive state restore");
+
+    processor.setCurrentProgram(1);
+    require(std::abs(processor.parameters.getRawParameterValue("chorusMix")->load()-0.14f)<0.001f,
+        "Warm Analog must select its chorus amount");
+    processor.setCurrentProgram(7);
+    require(processor.parameters.getRawParameterValue("chorusMix")->load()>0.39f,
+        "Slow Atmosphere must demonstrate the chorus processing path");
+    processor.setCurrentProgram(0);
+    require(processor.parameters.getRawParameterValue("chorusMix")->load()==0.0f
+        && std::abs(processor.parameters.getRawParameterValue("chorusRate")->load()-0.8f)<0.001f
+        && std::abs(processor.parameters.getRawParameterValue("chorusDepth")->load()-0.5f)<0.001f,
+        "Init must restore all chorus parameters to their neutral baseline");
+
+    require(processor.parameters.getRawParameterValue("cutoff")->load() > 1700.0f,
+        "Init program must restore its default filter cutoff");
+    require(processor.parameters.getRawParameterValue("delayMix")->load() == 0.0f
+        && processor.parameters.getRawParameterValue("filterDrive")->load() == 0.0f
+        && processor.parameters.getRawParameterValue("lfoPanDepth")->load() == 0.0f,
+        "Init must reset optional native audio paths to their neutral state");
+
+
+    // Hosts should receive the current effect tail, not an unconditional eight seconds.
+    WebPlaySynthAudioProcessor tailProcessor;
+    require(tailProcessor.getTailLengthSeconds() == 0.0,
+        "disabled delay and reverb must report no effect tail");
+    const auto setTailParameter = [&tailProcessor](const char* id,float value) {
+        auto* parameter=tailProcessor.parameters.getParameter(id);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    };
+    setTailParameter("delayMix",1.0f);
+    setTailParameter("delayTime",0.2f);
+    setTailParameter("delayFeedback",0.0f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-0.2) < 0.001,
+        "single-repeat delay must report one delay interval");
+    setTailParameter("delayFeedback",0.5f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-2.0) < 0.001,
+        "delay tail must account for repeats down to -60 dB");
+    setTailParameter("reverbMix",0.4f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-10.0) < 0.001,
+        "combined delay and reverb tails must be additive");
+
+    setTailParameter("chorusMix",1.0f);
+    require(std::abs(tailProcessor.getTailLengthSeconds()-10.028) < 0.001,
+        "active chorus must contribute its maximum short delay to the host tail");
+
+
+
+    // Browser hard sync replaces VCO 2 with a ratio-shaped periodic waveform.
+    const auto renderSyncWave = [](bool hardSync,float oscillator2Wave) {
+        WebPlaySynthAudioProcessor syncProcessor;
+        syncProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&syncProcessor](const char* id,float value) {
+            auto* parameter=syncProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Level",0.0f);
+        setPlain("osc2Level",1.0f);
+        setPlain("osc1Wave",0.0f);
+        setPlain("osc2Wave",oscillator2Wave);
+        setPlain("osc2Tune",7.0f);
+        setPlain("hardSync",hardSync?1.0f:0.0f);
+        setPlain("crossMod",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer syncMidi;
+        for(int block=0;block<96;++block) {
+            syncMidi.clear();
+            if(block==0) syncMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            syncProcessor.processBlock(output,syncMidi);
+        }
+        std::array<float,512> samples {};
+        for(int sample=0;sample<output.getNumSamples();++sample)
+            samples[static_cast<size_t>(sample)]=output.getSample(0,sample);
+        syncProcessor.releaseResources();
+        return samples;
+    };
+    const auto syncedSineSelection=renderSyncWave(true,0.0f);
+    const auto syncedSquareSelection=renderSyncWave(true,3.0f);
+    double syncedWaveformDifference=0.0;
+    for(size_t sample=0;sample<syncedSineSelection.size();++sample) {
+        const auto delta=syncedSineSelection[sample]-syncedSquareSelection[sample];
+        syncedWaveformDifference+=delta*delta;
+    }
+    require(syncedWaveformDifference<0.000001,
+        "hard sync must use the ratio-shaped sync wave regardless of VCO 2 waveform selection");
+    const auto freeSine=renderSyncWave(false,0.0f);
+    const auto freeSquare=renderSyncWave(false,3.0f);
+    double freeWaveformDifference=0.0;
+    for(size_t sample=0;sample<freeSine.size();++sample) {
+        const auto delta=freeSine[sample]-freeSquare[sample];
+        freeWaveformDifference+=delta*delta;
+    }
+    require(freeWaveformDifference>0.01,
+        "VCO 2 waveform selection must remain active when hard sync is disabled");
+
+
+    // Chorus must modulate a preallocated stereo delay line and alter rendered audio.
+    const auto renderChorus = [](float chorusDepth,float chorusMix) {
+        WebPlaySynthAudioProcessor chorusProcessor;
+        chorusProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&chorusProcessor](const char* id,float value) {
+            auto* parameter=chorusProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Wave",0.0f);
+        setPlain("osc1Level",1.0f);
+        setPlain("osc2Level",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        setPlain("chorusRate",1.7f);
+        setPlain("chorusDepth",chorusDepth);
+        setPlain("chorusMix",chorusMix);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer chorusMidi;
+        std::array<float,512> left {},right {};
+        for(int block=0;block<112;++block) {
+            chorusMidi.clear();
+            if(block==0) chorusMidi.addEvent(juce::MidiMessage::noteOn(1,69,0.8f),0);
+            chorusProcessor.processBlock(output,chorusMidi);
+        }
+        for(int sample=0;sample<output.getNumSamples();++sample) {
+            left[static_cast<size_t>(sample)]=output.getSample(0,sample);
+            right[static_cast<size_t>(sample)]=output.getSample(1,sample);
+        }
+        chorusProcessor.releaseResources();
+        return std::pair {left,right};
+    };
+    const auto dryChorus=renderChorus(0.0f,0.0f);
+    const auto wetChorus=renderChorus(1.0f,1.0f);
+    double chorusDifference=0.0, chorusStereoDifference=0.0;
+    for(size_t sample=0;sample<dryChorus.first.size();++sample) {
+        const auto delta=wetChorus.first[sample]-dryChorus.first[sample];
+        chorusDifference+=delta*delta;
+        const auto stereoDelta=wetChorus.first[sample]-wetChorus.second[sample];
+        chorusStereoDifference+=stereoDelta*stereoDelta;
+    }
+    require(chorusDifference>0.01,
+        "chorus depth and mix must alter the actual rendered voice signal");
+    require(chorusStereoDifference>0.001,
+        "stereo chorus must modulate the two output channels independently");
+
+    // Pulse-width control changes the band-limited square wave; LFO depth animates it.
+    const auto renderPulseWidth = [](float width,float pulseDepth) {
+        WebPlaySynthAudioProcessor pwmProcessor;
+        pwmProcessor.prepareToPlay(48000.0,512);
+        auto setPlain=[&pwmProcessor](const char* id,float value) {
+            auto* parameter=pwmProcessor.parameters.getParameter(id);
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        };
+        setPlain("osc1Level",0.0f);
+        setPlain("osc2Level",1.0f);
+        setPlain("osc2Wave",3.0f);
+        setPlain("osc2PulseWidth",width);
+        setPlain("lfoWave",0.0f);
+        setPlain("lfoRate",2.0f);
+        setPlain("lfoPulseDepth",pulseDepth);
+        setPlain("hardSync",0.0f);
+        setPlain("crossMod",0.0f);
+        setPlain("cutoff",18000.0f);
+        setPlain("resonance",0.1f);
+        setPlain("ampEnvEnabled",0.0f);
+        setPlain("filterEnvEnabled",0.0f);
+        juce::AudioBuffer<float> output(2,512);
+        juce::MidiBuffer pwmMidi;
+        for(int block=0;block<120;++block) {
+            pwmMidi.clear();
+            if(block==0) pwmMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            pwmProcessor.processBlock(output,pwmMidi);
+        }
+        std::array<float,512> samples {};
+        for(int sample=0;sample<output.getNumSamples();++sample)
+            samples[static_cast<size_t>(sample)]=output.getSample(0,sample);
+        pwmProcessor.releaseResources();
+        return samples;
+    };
+    const auto halfPulse=renderPulseWidth(0.5f,0.0f);
+    const auto narrowPulse=renderPulseWidth(0.25f,0.0f);
+    const auto animatedPulse=renderPulseWidth(0.5f,0.3f);
+    double widthDifference=0.0,pwmDifference=0.0;
+    for(size_t sample=0;sample<halfPulse.size();++sample) {
+        const auto widthDelta=halfPulse[sample]-narrowPulse[sample];
+        const auto pwmDelta=halfPulse[sample]-animatedPulse[sample];
+        widthDifference+=widthDelta*widthDelta;
+        pwmDifference+=pwmDelta*pwmDelta;
+    }
+    require(widthDifference>0.01,
+        "oscillator pulse width must change the rendered square-wave duty cycle");
+    require(pwmDifference>0.01,
+        "LFO pulse-width depth must animate the oscillator duty cycle");
+
+    // Full-depth settings must remain finite with four unison layers and all modulation/effects active.
+    WebPlaySynthAudioProcessor denseProcessor;
+    denseProcessor.prepareToPlay(48000.0,512);
+    const auto setDense=[&denseProcessor](const char* id,float value) {
+        auto* parameter=denseProcessor.parameters.getParameter(id);
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    };
+    setDense("unisonVoices",2.0f);
+    setDense("unisonDetune",50.0f);
+    setDense("stereoSpread",1.0f);
+    setDense("lfoPanDepth",1.0f);
+    setDense("lfoPulseDepth",0.45f);
+    setDense("lfoAmpDepth",1.0f);
+    setDense("filterDrive",24.0f);
+    setDense("resonance",18.0f);
+    setDense("filterType",2.0f);
+    setDense("chorusMix",1.0f);
+    setDense("delayMix",1.0f);
+    setDense("reverbMix",1.0f);
+    juce::AudioBuffer<float> denseAudio(2,512);
+    juce::MidiBuffer denseMidi;
+    for(int block=0;block<64;++block) {
+        denseMidi.clear();
+        if(block==0) {
+            denseMidi.addEvent(juce::MidiMessage::noteOn(1,48,0.8f),0);
+            denseMidi.addEvent(juce::MidiMessage::noteOn(1,60,0.8f),0);
+            denseMidi.addEvent(juce::MidiMessage::noteOn(1,67,0.8f),0);
+        }
+        denseProcessor.processBlock(denseAudio,denseMidi);
+        for(int channel=0;channel<denseAudio.getNumChannels();++channel)
+            for(int sample=0;sample<denseAudio.getNumSamples();++sample)
+                require(std::isfinite(denseAudio.getSample(channel,sample)),
+                    "maximum polyphonic DSP settings must not produce non-finite audio");
+    }
+    denseProcessor.releaseResources();
 
     // MIDI CC learn maps a controller to a host parameter and applies the
     // controller value through JUCE's normalized parameter interface.

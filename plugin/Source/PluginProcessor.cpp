@@ -8,12 +8,12 @@ juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; 
 const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
 {
     static const juce::StringArray ids {
-        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+        "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     return ids;
@@ -40,16 +40,17 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     const auto b=[&](const char* id,const char* name,bool v) { l.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{id,1},name,v)); };
     const auto c=[&](const char* id,const char* name,const juce::StringArray& choices,int v) { l.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{id,1},name,choices,v)); };
     c("osc1Wave","VCO 1 Waveform",waveNames(),2); c("osc2Wave","VCO 2 Waveform",waveNames(),3);
-    f("osc1Octave","VCO 1 Octave",-2,2,0,1); f("osc1Tune","VCO 1 Tune",-12,12,0,1); f("osc1Level","VCO 1 Level",0,1,.72f);
-    f("osc2Octave","VCO 2 Octave",-2,2,0,1); f("osc2Tune","VCO 2 Tune",-12,12,7,1); f("osc2Level","VCO 2 Level",0,1,.38f);
+    f("osc1Octave","VCO 1 Octave",-2,2,0,1); f("osc1Tune","VCO 1 Tune",-12,12,0,1); f("osc1Level","VCO 1 Level",0,1,.72f); f("osc1PulseWidth","VCO 1 Pulse Width",.05f,.95f,.5f,.001f);
+    f("osc2Octave","VCO 2 Octave",-2,2,0,1); f("osc2Tune","VCO 2 Tune",-12,12,7,1); f("osc2Level","VCO 2 Level",0,1,.38f); f("osc2PulseWidth","VCO 2 Pulse Width",.05f,.95f,.5f,.001f);
     b("hardSync","VCO 2 Hard Sync",false); f("crossMod","VCO Cross Modulation",0,800,0,.1f);
     f("cutoff","Filter Cutoff",30,18000,1800,1,1200); f("resonance","Filter Resonance",.1f,18,.8f,.01f); f("filterContour","Filter Contour",0,1,.55f);
     c("filterType","Filter Mode",{ "Low-pass", "High-pass", "Band-pass" },0); f("filterDrive","Filter Drive",0,24,0,.1f);
     f("filterAttack","Filter Envelope Attack",.005f,4,.025f,.001f); f("filterDecay","Filter Envelope Decay",.005f,5,.42f,.001f); f("filterSustain","Filter Envelope Sustain",0,1,.32f); f("filterRelease","Filter Envelope Release",.005f,6,.38f,.001f);
     f("ampAttack","Amp Envelope Attack",.005f,4,.015f,.001f); f("ampDecay","Amp Envelope Decay",.005f,5,.25f,.001f); f("ampSustain","Amp Envelope Sustain",0,1,.78f); f("ampRelease","Amp Envelope Release",.005f,6,.32f,.001f);
-    c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1);
+    c("lfoWave","LFO Waveform",waveNames(),0); f("lfoRate","LFO Rate",.1f,20,4.5f,.01f); f("lfoPitchDepth","LFO Pitch Depth",0,25,0,.01f); f("lfoFilterDepth","LFO Filter Depth",0,5000,0,1); f("lfoAmpDepth","LFO Amp Depth",0,1,0,.01f); f("lfoPanDepth","LFO Pan Depth",0,1,0,.01f); f("lfoPulseDepth","LFO Pulse Width Depth",0,.45f,0,.001f);
     f("master","Master Level",0,1,.72f);
     c("unisonVoices","Unison Voices",{ "1", "2", "4" },0); f("unisonDetune","Unison Detune",0,50,0,.1f); f("stereoSpread","Stereo Spread",0,1,0,.01f);
+    f("chorusRate","Chorus Rate",.1f,5.0f,.8f,.01f); f("chorusDepth","Chorus Depth",0,1,.5f,.01f); f("chorusMix","Chorus Mix",0,1,0,.01f);
     f("delayTime","Delay Time",.01f,1.5f,.32f,.001f); f("delayFeedback","Delay Feedback",0,.85f,.35f,.01f); f("delayMix","Delay Mix",0,1,0,.01f);
     f("reverbMix","Reverb Mix",0,1,0,.01f); f("reverbRoom","Reverb Room Size",.1f,.95f,.55f,.01f); f("reverbDamping","Reverb Damping",0,1,.4f,.01f);
     b("glideEnabled","Global Glide",false); f("glideTime","Glide Time",.01f,2,.18f,.01f);
@@ -65,8 +66,7 @@ void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
         filter.reset();
     }
     currentFilterType=0;
-    ampEnvelope.setSampleRate(sr);
-    filterEnvelope.setSampleRate(sr);
+    ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
 }
 void WebPlaySynthAudioProcessor::Voice::start(int n,float vel,const Parameters& p,double previous)
 {
@@ -88,16 +88,17 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     right=0.0f;
     if(!active) return;
     if(!keyDown && !ampEnvelope.isActive()) { active=false; note=-1; return; }
-    const auto glide=p.glideEnabled ? 1.0-std::exp(-1.0/(static_cast<double>(p.glideTime)*sr)) : 1.0;
+    // Match the browser engine's exponential ramp: reach 99.9% of the target within the configured time.
+    const auto glide=p.glideCoefficient;
     currentFrequency+=(targetFrequency-currentFrequency)*glide;
     if (currentFilterType != p.filterType) {
         const auto type = p.filterType == 1 ? juce::dsp::StateVariableTPTFilterType::highpass
             : p.filterType == 2 ? juce::dsp::StateVariableTPTFilterType::bandpass
                                 : juce::dsp::StateVariableTPTFilterType::lowpass;
-        for (auto& filter : filters)
-            filter.setType(type);
+        for (auto& filter : filters) filter.setType(type);
         currentFilterType = p.filterType;
     }
+
     const auto base1=currentFrequency*std::pow(2.0,(p.osc1Octave*12.0+p.osc1Tune)/12.0);
     const auto base2=currentFrequency*std::pow(2.0,(p.osc2Octave*12.0+p.osc2Tune)/12.0);
     const auto lfo=waveformSample(lfoPhase,p.lfoWave);
@@ -105,47 +106,73 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     if(lfoPhase>=1) lfoPhase-=std::floor(lfoPhase);
 
     const int unisonCount = 1 << juce::jlimit(0, 2, p.unisonVoices);
-    const auto layerGain = 1.0f / std::sqrt(static_cast<float>(unisonCount));
-    const auto panScale = juce::MathConstants<float>::sqrt2;
     float mixLeft=0.0f, mixRight=0.0f;
     for (int layer=0; layer<unisonCount; ++layer) {
-        const auto position = unisonCount == 1 ? 0.0 : -1.0 + (2.0 * layer / static_cast<double>(unisonCount - 1));
-        const auto detuneRatio = std::pow(2.0, p.unisonDetune * position / 1200.0);
+        const auto detuneRatio = p.unisonDetuneRatios[static_cast<size_t>(layer)];
         const auto mod = static_cast<double>(lfo*p.lfoPitchDepth);
         const auto f1=juce::jlimit(10.0,20000.0,base1*detuneRatio+mod);
         const auto f2=juce::jlimit(10.0,20000.0,base2*detuneRatio+mod);
         const auto inc2=f2/sr;
-        const auto s2=oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave);
+        float s2=0.0f;
+        if (p.hardSync) {
+            // The browser engine builds a saw-shaped PeriodicWave from the
+            // oscillator frequency ratio, overriding VCO 2's selected waveform.
+            const auto syncRatio=juce::jlimit(0.25,8.0,base2/base1);
+            const auto syncMasterFrequency=juce::jlimit(10.0,20000.0,base1+mod);
+            const auto syncPhase=phase2[static_cast<size_t>(layer)]*syncRatio;
+            const auto wrappedSyncPhase=syncPhase-std::floor(syncPhase);
+            const auto syncIncrement=juce::jlimit(0.0001,0.49,syncRatio*syncMasterFrequency/sr);
+            s2=oscillatorSample(wrappedSyncPhase,syncIncrement,2);
+            const auto masterResetFraction=syncRatio-std::floor(syncRatio);
+            const auto masterIncrement=juce::jlimit(0.0001,0.49,syncMasterFrequency/sr);
+            s2-=static_cast<float>(masterResetFraction)
+                * WebPlaySynthAudioProcessor::polyBlep(phase2[static_cast<size_t>(layer)],masterIncrement);
+        } else {
+            s2=oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave,
+                juce::jlimit(0.05f,0.95f,p.osc2PulseWidth+static_cast<float>(lfo)*p.lfoPulseDepth));
+        }
         const auto fm=juce::jlimit(10.0,20000.0,f1+s2*p.crossMod);
         const auto oldPhase=phase1[static_cast<size_t>(layer)];
         const auto increment1=fm/sr;
-        const auto s1=oscillatorSample(oldPhase,increment1,p.osc1Wave);
+        const auto s1=oscillatorSample(oldPhase,increment1,p.osc1Wave,
+            juce::jlimit(0.05f,0.95f,p.osc1PulseWidth+static_cast<float>(lfo)*p.lfoPulseDepth));
         phase1[static_cast<size_t>(layer)]+=increment1;
         if(phase1[static_cast<size_t>(layer)]>=1) phase1[static_cast<size_t>(layer)]-=std::floor(phase1[static_cast<size_t>(layer)]);
-        phase2[static_cast<size_t>(layer)]+=inc2;
+        const auto phase2Increment = p.hardSync
+            ? juce::jlimit(10.0,20000.0,base1+mod)/sr
+            : inc2;
+        phase2[static_cast<size_t>(layer)]+=phase2Increment;
         if(phase2[static_cast<size_t>(layer)]>=1) phase2[static_cast<size_t>(layer)]-=std::floor(phase2[static_cast<size_t>(layer)]);
-        if(p.hardSync && phase1[static_cast<size_t>(layer)]<oldPhase) phase2[static_cast<size_t>(layer)]=0.0;
 
         const auto oscillatorMix=s1*p.osc1Level*(p.vco1Enabled?1.0f:0.0f)
             +s2*p.osc2Level*(p.vco2Enabled?1.0f:0.0f);
-        const auto pan=static_cast<float>(position*p.stereoSpread);
-        const auto angle=(pan+1.0f)*juce::MathConstants<float>::pi*0.25f;
-        mixLeft+=oscillatorMix*std::cos(angle)*panScale*layerGain;
-        mixRight+=oscillatorMix*std::sin(angle)*panScale*layerGain;
+        if (p.lfoPanDepth > 0.0f) {
+            const auto pan=juce::jlimit(-1.0f,1.0f,p.unisonPanPositions[static_cast<size_t>(layer)]+static_cast<float>(lfo*p.lfoPanDepth));
+            const auto angle=(pan+1.0f)*juce::MathConstants<float>::pi*0.25f;
+            const auto panScale=juce::MathConstants<float>::sqrt2;
+            mixLeft+=oscillatorMix*std::cos(angle)*panScale*p.unisonLayerGain;
+            mixRight+=oscillatorMix*std::sin(angle)*panScale*p.unisonLayerGain;
+        } else {
+            mixLeft+=oscillatorMix*p.unisonLeftGains[static_cast<size_t>(layer)];
+            mixRight+=oscillatorMix*p.unisonRightGains[static_cast<size_t>(layer)];
+        }
     }
 
     const auto amp=p.ampEnvEnabled?ampEnvelope.getNextSample():1.0f;
     const auto env=p.filterEnvEnabled?filterEnvelope.getNextSample():0.0f;
     const auto cutoff=juce::jlimit(30.0f,19000.0f,p.cutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
-    const auto driveGain = std::pow(10.0f, p.filterDrive / 20.0f);
-    const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * driveGain) : mixLeft;
-    const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * driveGain) : mixRight;
-    for (auto& filter : filters) {
-        filter.setCutoffFrequency(cutoff);
-        filter.setResonance(p.resonance);
+    const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * p.filterDriveGain) : mixLeft;
+    const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * p.filterDriveGain) : mixRight;
+    if (currentResonance != p.resonance) {
+        for (auto& filter : filters)
+            filter.setResonance(p.resonance);
+        currentResonance=p.resonance;
     }
-    left = filters[0].processSample(0, drivenLeft) * amp * velocity;
-    right = filters[1].processSample(0, drivenRight) * amp * velocity;
+    for (auto& filter : filters)
+        filter.setCutoffFrequency(cutoff);
+    const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
+    left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity;
+    right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity;
 }
 
 
@@ -157,53 +184,68 @@ const std::array<FactoryPreset, 8>& factoryPresets()
     static const std::array<FactoryPreset, 8> presets {{
         { "Init", {
             { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc1Octave", 0 }, { "osc1Tune", 0 },
-            { "osc1Level", .72f }, { "osc2Octave", 0 }, { "osc2Tune", 7 }, { "osc2Level", .38f },
+            { "osc1Level", .72f }, { "osc1PulseWidth", .5f }, { "osc2Octave", 0 }, { "osc2Tune", 7 }, { "osc2Level", .38f }, { "osc2PulseWidth", .5f },
             { "hardSync", 0 }, { "crossMod", 0 }, { "cutoff", 1800 }, { "resonance", .8f },
-            { "filterContour", .55f }, { "filterAttack", .025f }, { "filterDecay", .42f },
+            { "filterContour", .55f }, { "filterType", 0 }, { "filterDrive", 0 },
+            { "filterAttack", .025f }, { "filterDecay", .42f },
             { "filterSustain", .32f }, { "filterRelease", .38f }, { "ampAttack", .015f },
             { "ampDecay", .25f }, { "ampSustain", .78f }, { "ampRelease", .32f },
-            { "lfoWave", 0 }, { "lfoRate", 4.5f }, { "lfoPitchDepth", 0 }, { "lfoFilterDepth", 0 },
-            { "master", .72f }, { "glideEnabled", 0 }, { "glideTime", .18f },
+            { "lfoWave", 0 }, { "lfoRate", 4.5f }, { "lfoPitchDepth", 0 }, { "lfoFilterDepth", 0 }, { "lfoAmpDepth", 0 }, { "lfoPanDepth", 0 }, { "lfoPulseDepth", 0 },
+            { "master", .72f }, { "unisonVoices", 0 }, { "unisonDetune", 0 }, { "stereoSpread", 0 },
+            { "chorusRate", .8f }, { "chorusDepth", .5f }, { "chorusMix", 0 },
+            { "delayTime", .32f }, { "delayFeedback", .35f }, { "delayMix", 0 },
+            { "reverbMix", 0 }, { "reverbRoom", .55f }, { "reverbDamping", .4f }, { "glideEnabled", 0 }, { "glideTime", .18f },
             { "vco1Enabled", 1 }, { "vco2Enabled", 1 }, { "filterEnvEnabled", 1 }, { "ampEnvEnabled", 1 }
         }},
         { "Warm Analog", {
             { "osc1Wave", 0 }, { "osc2Wave", 1 }, { "osc1Tune", -4 }, { "osc2Tune", 3 },
             { "osc1Level", .8f }, { "osc2Level", .28f }, { "cutoff", 2400 }, { "resonance", 1.2f },
             { "filterContour", .25f }, { "ampAttack", .025f }, { "ampDecay", .4f }, { "ampSustain", .72f },
-            { "ampRelease", .45f }, { "filterAttack", .04f }, { "filterDecay", .7f }, { "filterSustain", .4f }
+            { "ampRelease", .45f }, { "filterAttack", .04f }, { "filterDecay", .7f }, { "filterSustain", .4f },
+            { "filterDrive", 3 }, { "unisonVoices", 1 }, { "unisonDetune", 7 }, { "stereoSpread", .28f }, { "reverbMix", .1f },
+            { "chorusRate", .8f }, { "chorusDepth", .45f }, { "chorusMix", .14f }
         }},
         { "Sync Lead", {
             { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc2Tune", 12 }, { "hardSync", 1 },
             { "crossMod", 85 }, { "cutoff", 5200 }, { "resonance", 2.2f }, { "filterContour", .7f },
             { "filterAttack", .005f }, { "filterDecay", .3f }, { "filterSustain", .15f },
             { "ampAttack", .008f }, { "ampDecay", .18f }, { "ampSustain", .82f }, { "ampRelease", .22f },
-            { "glideEnabled", 1 }, { "glideTime", .12f }
+            { "glideEnabled", 1 }, { "glideTime", .12f }, { "filterDrive", 5 }, { "unisonVoices", 1 }, { "unisonDetune", 3 },
+            { "stereoSpread", .22f }, { "chorusRate", 1.1f }, { "chorusDepth", .28f }, { "chorusMix", .08f },
+            { "delayTime", .24f }, { "delayFeedback", .2f }, { "delayMix", .1f }
         }},
         { "Deep Bass", {
             { "osc1Wave", 3 }, { "osc2Wave", 0 }, { "osc1Octave", -1 }, { "osc2Octave", -1 },
             { "osc1Tune", 0 }, { "osc2Tune", 7 }, { "osc1Level", .9f }, { "osc2Level", .22f },
             { "cutoff", 650 }, { "resonance", 1.8f }, { "filterContour", .5f },
             { "filterAttack", .005f }, { "filterDecay", .5f }, { "filterSustain", .12f },
-            { "ampAttack", .01f }, { "ampDecay", .25f }, { "ampSustain", .8f }, { "ampRelease", .2f }
+            { "ampAttack", .01f }, { "ampDecay", .25f }, { "ampSustain", .8f }, { "ampRelease", .2f },
+            { "filterDrive", 8 }, { "unisonVoices", 1 }, { "unisonDetune", 2 }, { "stereoSpread", 0 }
         }},
         { "Glass Pluck", {
             { "osc1Wave", 0 }, { "osc2Wave", 1 }, { "osc2Tune", 12 }, { "osc1Level", .65f },
             { "osc2Level", .4f }, { "cutoff", 8500 }, { "resonance", .7f }, { "filterContour", .2f },
             { "ampAttack", .005f }, { "ampDecay", .65f }, { "ampSustain", .05f }, { "ampRelease", .8f },
             { "filterAttack", .005f }, { "filterDecay", .8f }, { "filterSustain", .08f },
-            { "lfoWave", 1 }, { "lfoRate", 5.5f }, { "lfoPitchDepth", .3f }
+            { "lfoWave", 1 }, { "lfoRate", 5.5f }, { "lfoPitchDepth", .3f },
+            { "filterType", 2 }, { "filterDrive", 1 }, { "chorusRate", .6f }, { "chorusDepth", .8f }, { "chorusMix", .24f }, { "delayTime", .42f }, { "delayFeedback", .35f },
+            { "delayMix", .18f }, { "reverbMix", .28f }, { "reverbRoom", .62f }
         }},
         { "PWM Motion", {
             { "osc1Wave", 1 }, { "osc2Wave", 3 }, { "crossMod", 35 }, { "cutoff", 3200 },
             { "resonance", 1.1f }, { "lfoWave", 1 }, { "lfoRate", .35f }, { "lfoPitchDepth", .8f },
-            { "lfoFilterDepth", 900 }, { "filterContour", .35f }, { "ampSustain", .75f }
+            { "lfoFilterDepth", 900 }, { "filterContour", .35f }, { "ampSustain", .75f },
+            { "osc1PulseWidth", .5f }, { "osc2PulseWidth", .25f }, { "lfoPulseDepth", .22f },
+            { "unisonVoices", 1 }, { "unisonDetune", 6 }, { "stereoSpread", .6f }, { "lfoAmpDepth", .2f }, { "lfoPanDepth", .5f },
+            { "chorusRate", .45f }, { "chorusDepth", .7f }, { "chorusMix", .28f }
         }},
         { "Acid Sequence", {
             { "osc1Wave", 2 }, { "osc2Wave", 3 }, { "osc2Tune", 12 }, { "crossMod", 120 },
             { "cutoff", 1100 }, { "resonance", 8 }, { "filterContour", .9f },
             { "filterAttack", .005f }, { "filterDecay", .22f }, { "filterSustain", .05f },
             { "filterRelease", .18f }, { "ampAttack", .005f }, { "ampDecay", .16f },
-            { "ampSustain", .65f }, { "ampRelease", .12f }
+            { "ampSustain", .65f }, { "ampRelease", .12f }, { "filterDrive", 12 }, { "lfoAmpDepth", .06f },
+            { "delayTime", .18f }, { "delayFeedback", .16f }, { "delayMix", .08f }
         }},
         { "Slow Atmosphere", {
             { "osc1Wave", 0 }, { "osc2Wave", 1 }, { "osc1Octave", 1 }, { "osc2Octave", 0 },
@@ -211,7 +253,12 @@ const std::array<FactoryPreset, 8>& factoryPresets()
             { "filterAttack", 1.2f }, { "filterDecay", 2.5f }, { "filterSustain", .8f },
             { "filterRelease", 3.5f }, { "ampAttack", 1.5f }, { "ampDecay", 2.2f },
             { "ampSustain", .85f }, { "ampRelease", 4.5f }, { "lfoWave", 0 },
-            { "lfoRate", .18f }, { "lfoPitchDepth", .4f }, { "lfoFilterDepth", 650 }
+            { "lfoRate", .18f }, { "lfoPitchDepth", .4f }, { "lfoFilterDepth", 650 },
+            { "unisonVoices", 2 }, { "unisonDetune", 20 }, { "stereoSpread", .95f },
+            { "chorusRate", .25f }, { "chorusDepth", .95f }, { "chorusMix", .4f },
+            { "delayTime", .58f }, { "delayFeedback", .6f }, { "delayMix", .38f },
+            { "reverbMix", .65f }, { "reverbRoom", .9f }, { "reverbDamping", .28f },
+            { "lfoAmpDepth", .3f }, { "lfoPanDepth", .45f }
         }}
     }};
     return presets;
@@ -243,12 +290,44 @@ void WebPlaySynthAudioProcessor::setCurrentProgram(int index)
         applyPreset(factoryPresets()[static_cast<size_t>(index)]);
 }
 
+
+double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
+{
+    constexpr double silenceThreshold = 0.001; // -60 dB amplitude
+    const auto delayMix = parameters.getRawParameterValue("delayMix")->load();
+    const auto delayFeedback = parameters.getRawParameterValue("delayFeedback")->load();
+    const auto delayTime = parameters.getRawParameterValue("delayTime")->load();
+    const auto reverbMix = parameters.getRawParameterValue("reverbMix")->load();
+    const auto chorusMix = parameters.getRawParameterValue("chorusMix")->load();
+
+    double tailSeconds = chorusMix > 0.0f ? 0.028 : 0.0;
+    if (delayMix > 0.0f) {
+        const auto feedback = static_cast<double>(juce::jlimit(0.0f, 0.85f, delayFeedback));
+        const auto repeats = feedback > 0.0
+            ? std::ceil(std::log(silenceThreshold) / std::log(feedback))
+            : 1.0;
+        tailSeconds += static_cast<double>(delayTime) * juce::jmax(1.0, repeats);
+    }
+
+    // JUCE's Freeverb network has no inexpensive exact decay-time query.
+    // Retain the engine's conservative eight-second allowance when enabled.
+    if (reverbMix > 0.0f)
+        tailSeconds += 8.0;
+
+    return tailSeconds;
+}
+
 void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
     for(auto& v:voices) v.prepare(sr,block);
     reverb.setSampleRate(sr);
     reverb.reset();
+    const auto chorusBufferSize=static_cast<size_t>(std::ceil(sr*0.05))+2;
+    chorusBufferLeft.assign(chorusBufferSize,0.0f);
+    chorusBufferRight.assign(chorusBufferSize,0.0f);
+    chorusWritePosition=0;
+    chorusPhase=0.0;
     const auto delayBufferSize=static_cast<size_t>(std::ceil(sr*2.0))+2;
     delayBufferLeft.assign(delayBufferSize,0.0f);
     delayBufferRight.assign(delayBufferSize,0.0f);
@@ -258,6 +337,10 @@ void WebPlaySynthAudioProcessor::releaseResources()
 {
     for(auto& v:voices) { v.active=false; v.keyDown=false; }
     reverb.reset();
+    std::fill(chorusBufferLeft.begin(),chorusBufferLeft.end(),0.0f);
+    std::fill(chorusBufferRight.begin(),chorusBufferRight.end(),0.0f);
+    chorusWritePosition=0;
+    chorusPhase=0.0;
     std::fill(delayBufferLeft.begin(),delayBufferLeft.end(),0.0f);
     std::fill(delayBufferRight.begin(),delayBufferRight.end(),0.0f);
     delayWritePosition=0;
@@ -279,18 +362,38 @@ bool WebPlaySynthAudioProcessor::isBusesLayoutSupported(const BusesLayout& l) co
 WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameters() const
 {
     const auto v=[this](const char* id){return parameters.getRawParameterValue(id)->load();}; Parameters p;
-    p.osc1Wave=juce::roundToInt(v("osc1Wave")); p.osc2Wave=juce::roundToInt(v("osc2Wave")); p.osc1Octave=v("osc1Octave"); p.osc1Tune=v("osc1Tune"); p.osc1Level=v("osc1Level");
-    p.osc2Octave=v("osc2Octave"); p.osc2Tune=v("osc2Tune"); p.osc2Level=v("osc2Level"); p.hardSync=v("hardSync")>.5f; p.crossMod=v("crossMod");
+    p.osc1Wave=juce::roundToInt(v("osc1Wave")); p.osc2Wave=juce::roundToInt(v("osc2Wave")); p.osc1Octave=v("osc1Octave"); p.osc1Tune=v("osc1Tune"); p.osc1Level=v("osc1Level"); p.osc1PulseWidth=v("osc1PulseWidth");
+    p.osc2Octave=v("osc2Octave"); p.osc2Tune=v("osc2Tune"); p.osc2Level=v("osc2Level"); p.osc2PulseWidth=v("osc2PulseWidth"); p.hardSync=v("hardSync")>.5f; p.crossMod=v("crossMod");
     p.cutoff=v("cutoff"); p.resonance=v("resonance"); p.filterContour=v("filterContour");
     p.filterType=juce::roundToInt(v("filterType")); p.filterDrive=v("filterDrive");
     p.filterAttack=v("filterAttack"); p.filterDecay=v("filterDecay"); p.filterSustain=v("filterSustain"); p.filterRelease=v("filterRelease");
     p.ampAttack=v("ampAttack"); p.ampDecay=v("ampDecay"); p.ampSustain=v("ampSustain"); p.ampRelease=v("ampRelease");
-    p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth");
+    p.lfoWave=juce::roundToInt(v("lfoWave")); p.lfoRate=v("lfoRate"); p.lfoPitchDepth=v("lfoPitchDepth"); p.lfoFilterDepth=v("lfoFilterDepth"); p.lfoAmpDepth=v("lfoAmpDepth"); p.lfoPanDepth=v("lfoPanDepth"); p.lfoPulseDepth=v("lfoPulseDepth");
     p.master=v("master"); p.unisonVoices=juce::roundToInt(v("unisonVoices")); p.unisonDetune=v("unisonDetune"); p.stereoSpread=v("stereoSpread");
+    p.chorusRate=v("chorusRate"); p.chorusDepth=v("chorusDepth"); p.chorusMix=v("chorusMix");
     p.delayTime=v("delayTime"); p.delayFeedback=v("delayFeedback"); p.delayMix=v("delayMix");
     p.reverbMix=v("reverbMix"); p.reverbRoom=v("reverbRoom"); p.reverbDamping=v("reverbDamping");
     p.glideEnabled=v("glideEnabled")>.5f; p.glideTime=v("glideTime");
     p.vco1Enabled=v("vco1Enabled")>.5f; p.vco2Enabled=v("vco2Enabled")>.5f; p.filterEnvEnabled=v("filterEnvEnabled")>.5f; p.ampEnvEnabled=v("ampEnvEnabled")>.5f;
+
+    // Values that only change with the parameter snapshot belong here, not in
+    // the per-voice/per-sample renderer.
+    p.glideCoefficient=p.glideEnabled
+        ? 1.0-std::exp(-std::log(1000.0)/(static_cast<double>(p.glideTime)*currentSampleRate))
+        : 1.0;
+    p.filterDriveGain=std::pow(10.0f,p.filterDrive/20.0f);
+    const auto unisonCount=1<<juce::jlimit(0,2,p.unisonVoices);
+    const auto layerGain=1.0f/std::sqrt(static_cast<float>(unisonCount));
+    p.unisonLayerGain=layerGain;
+    const auto panScale=juce::MathConstants<float>::sqrt2;
+    for(int layer=0;layer<4;++layer) {
+        const auto position=unisonCount==1?0.0:(layer<unisonCount?-1.0+2.0*layer/static_cast<double>(unisonCount-1):0.0);
+        p.unisonDetuneRatios[static_cast<size_t>(layer)]=std::pow(2.0,p.unisonDetune*position/1200.0);
+        p.unisonPanPositions[static_cast<size_t>(layer)]=static_cast<float>(position*p.stereoSpread);
+        const auto angle=(p.unisonPanPositions[static_cast<size_t>(layer)]+1.0f)*juce::MathConstants<float>::pi*0.25f;
+        p.unisonLeftGains[static_cast<size_t>(layer)]=std::cos(angle)*panScale*layerGain;
+        p.unisonRightGains[static_cast<size_t>(layer)]=std::sin(angle)*panScale*layerGain;
+    }
     return p;
 }
 void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& midi)
@@ -334,6 +437,47 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
 {
     const auto channelCount=output.getNumChannels();
     const auto sampleCount=output.getNumSamples();
+    const auto chorusBufferSize=static_cast<int>(chorusBufferLeft.size());
+    if (chorusBufferSize > 2 && channelCount > 0) {
+        const auto mix=juce::jlimit(0.0f,1.0f,p.chorusMix);
+        const auto depthSeconds=0.008f*juce::jlimit(0.0f,1.0f,p.chorusDepth);
+        const auto rate=juce::jlimit(0.1f,5.0f,p.chorusRate);
+        const auto stereo=channelCount > 1;
+        const auto baseDelaySeconds=0.020f;
+        for (int sample=0; sample<sampleCount; ++sample) {
+            const auto inputLeft=output.getSample(0,sample);
+            const auto inputRight=stereo ? output.getSample(1,sample) : inputLeft;
+            chorusBufferLeft[static_cast<size_t>(chorusWritePosition)]=inputLeft;
+            chorusBufferRight[static_cast<size_t>(chorusWritePosition)]=inputRight;
+
+            const auto modLeft=std::sin(chorusPhase);
+            const auto modRight=stereo ? std::sin(chorusPhase+juce::MathConstants<double>::halfPi) : modLeft;
+            const auto delayLeft=(baseDelaySeconds+depthSeconds*modLeft)*currentSampleRate;
+            const auto delayRight=(baseDelaySeconds+depthSeconds*modRight)*currentSampleRate;
+            const auto readWet=[&](const std::vector<float>& buffer,double delaySamples) {
+                const auto wholeDelay=static_cast<int>(std::floor(delaySamples));
+                const auto fraction=static_cast<float>(delaySamples-wholeDelay);
+                auto first=chorusWritePosition-wholeDelay;
+                while(first<0) first+=chorusBufferSize;
+                auto second=first-1;
+                if(second<0) second+=chorusBufferSize;
+                const auto a=buffer[static_cast<size_t>(first)];
+                const auto b=buffer[static_cast<size_t>(second)];
+                return a+(b-a)*fraction;
+            };
+            const auto wetLeft=readWet(chorusBufferLeft,delayLeft);
+            const auto wetRight=stereo ? readWet(chorusBufferRight,delayRight) : wetLeft;
+            output.setSample(0,sample,inputLeft*(1.0f-mix)+wetLeft*mix);
+            if(stereo)
+                output.setSample(1,sample,inputRight*(1.0f-mix)+wetRight*mix);
+
+            chorusPhase+=rate/currentSampleRate;
+            if(chorusPhase>=juce::MathConstants<double>::twoPi)
+                chorusPhase-=juce::MathConstants<double>::twoPi;
+            if(++chorusWritePosition>=chorusBufferSize) chorusWritePosition=0;
+        }
+    }
+
     const auto bufferSize=static_cast<int>(delayBufferLeft.size());
     if (bufferSize > 2 && channelCount > 0) {
         const auto delaySamples=juce::jlimit(1,bufferSize-1,juce::roundToInt(p.delayTime*static_cast<float>(currentSampleRate)));
@@ -359,15 +503,24 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
             if (++delayWritePosition >= bufferSize) delayWritePosition=0;
         }
     }
-    juce::Reverb::Parameters rp;
-    rp.roomSize=p.reverbRoom; rp.damping=p.reverbDamping; rp.wetLevel=p.reverbMix;
-    rp.dryLevel=1.0f-p.reverbMix; rp.width=1.0f; rp.freezeMode=0.0f;
+
+    juce::Reverb::Parameters reverbParameters;
+    reverbParameters.roomSize=p.reverbRoom;
+    reverbParameters.damping=p.reverbDamping;
+    reverbParameters.wetLevel=p.reverbMix;
+    reverbParameters.dryLevel=1.0f-p.reverbMix;
+    reverbParameters.width=1.0f;
+    reverbParameters.freezeMode=0.0f;
     const auto& current=reverb.getParameters();
-    if (current.roomSize!=rp.roomSize || current.damping!=rp.damping || current.wetLevel!=rp.wetLevel
-        || current.dryLevel!=rp.dryLevel || current.width!=rp.width || current.freezeMode!=rp.freezeMode)
-        reverb.setParameters(rp);
-    if (channelCount > 1) reverb.processStereo(output.getWritePointer(0),output.getWritePointer(1),sampleCount);
-    else if (channelCount == 1) reverb.processMono(output.getWritePointer(0),sampleCount);
+    if (current.roomSize!=reverbParameters.roomSize || current.damping!=reverbParameters.damping
+        || current.wetLevel!=reverbParameters.wetLevel || current.dryLevel!=reverbParameters.dryLevel
+        || current.width!=reverbParameters.width || current.freezeMode!=reverbParameters.freezeMode)
+        reverb.setParameters(reverbParameters);
+
+    if (channelCount > 1)
+        reverb.processStereo(output.getWritePointer(0),output.getWritePointer(1),sampleCount);
+    else if (channelCount == 1)
+        reverb.processMono(output.getWritePointer(0),sampleCount);
 }
 
 void WebPlaySynthAudioProcessor::renderRange(juce::AudioBuffer<float>& b,int start,int end,const Parameters& p)
@@ -488,23 +641,32 @@ float WebPlaySynthAudioProcessor::waveformSample(double phase,int wave)
         default:return 0;
     }
 }
-float WebPlaySynthAudioProcessor::oscillatorSample(double phase,double inc,int wave)
+float WebPlaySynthAudioProcessor::oscillatorSample(double phase,double inc,int wave,float pulseWidth)
 {
-    auto s=waveformSample(phase,wave);
-    if(wave==2) s-=polyBlep(phase,inc);
-    else if(wave==3) { s+=polyBlep(phase,inc); auto shifted=phase+.5; if(shifted>=1) shifted-=1; s-=polyBlep(shifted,inc); }
-    return s;
+    if (wave == 3) {
+        const auto width=juce::jlimit(0.05f,0.95f,pulseWidth);
+        auto sample=phase<width?1.0f:-1.0f;
+        sample+=polyBlep(phase,inc);
+        auto pulseEdge=phase-width;
+        if(pulseEdge<0.0) pulseEdge+=1.0;
+        sample-=polyBlep(pulseEdge,inc);
+        return sample;
+    }
+
+    auto sample=waveformSample(phase,wave);
+    if(wave==2) sample-=polyBlep(phase,inc);
+    return sample;
 }
 juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return new WebPlaySynthAudioProcessorEditor(*this); }
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     if (auto xml = parameters.copyState().createXml()) {
+        xml->setAttribute("CURRENT_PROGRAM", currentProgram.load(std::memory_order_relaxed));
         for (int cc = 0; cc < static_cast<int>(midiCcToParameter.size()); ++cc) {
             const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
             if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size())
                 xml->setAttribute("MIDI_CC_" + juce::String(cc), midiCcParameterIds()[parameterIndex]);
         }
-        xml->setAttribute("CURRENT_PROGRAM", currentProgram.load(std::memory_order_relaxed));
         copyXmlToBinary(*xml, dest);
     }
 }
@@ -514,8 +676,9 @@ void WebPlaySynthAudioProcessor::setStateInformation(const void* data, int size)
     if (auto xml = getXmlFromBinary(data, size)) {
         if (!xml->hasTagName(parameters.state.getType()))
             return;
+        if (xml->hasAttribute("CURRENT_PROGRAM"))
+            currentProgram.store(juce::jlimit(0, getNumPrograms() - 1, xml->getIntAttribute("CURRENT_PROGRAM")), std::memory_order_relaxed);
 
-        currentProgram.store(juce::jlimit(0, getNumPrograms() - 1, xml->getIntAttribute("CURRENT_PROGRAM", 0)), std::memory_order_relaxed);
         for (auto& assignment : midiCcToParameter)
             assignment.store(-1);
         midiCcLearnTarget.store(-1);

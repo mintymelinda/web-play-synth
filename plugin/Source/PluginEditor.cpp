@@ -21,12 +21,14 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("osc1Octave", "OCTAVE", groupSlots[0]);
     addKnob("osc1Tune", "TUNE", groupSlots[0]);
     addKnob("osc1Level", "LEVEL", groupSlots[0]);
+    addKnob("osc1PulseWidth", "PULSE WIDTH", groupSlots[0]);
 
     addGroup("VCO 02  /  MODULATOR OSCILLATOR", groupSlots[1]);
     addChoice("osc2Wave", "WAVEFORM", { "Sine", "Triangle", "Saw", "Square" }, groupSlots[1]);
     addKnob("osc2Octave", "OCTAVE", groupSlots[1]);
     addKnob("osc2Tune", "TUNE", groupSlots[1]);
     addKnob("osc2Level", "LEVEL", groupSlots[1]);
+    addKnob("osc2PulseWidth", "PULSE WIDTH", groupSlots[1]);
     addKnob("crossMod", "FM AMOUNT", groupSlots[1]);
     addToggle("hardSync", "HARD SYNC", groupSlots[1]);
 
@@ -54,6 +56,9 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("lfoRate", "RATE", groupSlots[5]);
     addKnob("lfoPitchDepth", "PITCH DEPTH", groupSlots[5]);
     addKnob("lfoFilterDepth", "FILTER DEPTH", groupSlots[5]);
+    addKnob("lfoAmpDepth", "AMP DEPTH", groupSlots[5]);
+    addKnob("lfoPanDepth", "PAN DEPTH", groupSlots[5]);
+    addKnob("lfoPulseDepth", "PWM DEPTH", groupSlots[5]);
 
     addGroup("OUTPUT  /  PERFORMANCE + UNISON", groupSlots[6]);
     addKnob("master", "MASTER", groupSlots[6]);
@@ -69,11 +74,22 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addToggle("filterEnvEnabled", "FILTER ENV → VCF", groupSlots[7]);
     addToggle("ampEnvEnabled", "AMP ENV → VCA", groupSlots[7]);
 
+    addGroup("FX  /  STEREO TIME + SPACE", groupSlots[8]);
+    addKnob("chorusRate", "CHORUS RATE", groupSlots[8]);
+    addKnob("chorusDepth", "CHORUS DEPTH", groupSlots[8]);
+    addKnob("chorusMix", "CHORUS MIX", groupSlots[8]);
+    addKnob("delayTime", "DELAY TIME", groupSlots[8]);
+    addKnob("delayFeedback", "FEEDBACK", groupSlots[8]);
+    addKnob("delayMix", "DELAY MIX", groupSlots[8]);
+    addKnob("reverbMix", "REVERB MIX", groupSlots[8]);
+    addKnob("reverbRoom", "ROOM SIZE", groupSlots[8]);
+    addKnob("reverbDamping", "DAMPING", groupSlots[8]);
+
     presetSelector = std::make_unique<juce::ComboBox>();
     for (int program = 0; program < synthProcessor.getNumPrograms(); ++program)
         presetSelector->addItem(synthProcessor.getProgramName(program), program + 1);
     presetSelector->setSelectedId(synthProcessor.getCurrentProgram() + 1, juce::dontSendNotification);
-    presetSelector->setTooltip("Load a factory patch. Parameter changes remain host-automatable.");
+    presetSelector->setTooltip("Load a factory patch. Changes remain host-automatable and saved in plugin state.");
     presetSelector->setColour(juce::ComboBox::backgroundColourId, panel);
     presetSelector->setColour(juce::ComboBox::textColourId, text);
     presetSelector->setColour(juce::ComboBox::outlineColourId, border);
@@ -84,11 +100,6 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     };
     addAndMakeVisible(*presetSelector);
 
-    addGroup("FX  /  STEREO TIME + SPACE", groupSlots[8]);
-    addKnob("delayTime", "DELAY TIME", groupSlots[8]); addKnob("delayFeedback", "FEEDBACK", groupSlots[8]);
-    addKnob("delayMix", "DELAY MIX", groupSlots[8]); addKnob("reverbMix", "REVERB MIX", groupSlots[8]);
-    addKnob("reverbRoom", "ROOM SIZE", groupSlots[8]); addKnob("reverbDamping", "DAMPING", groupSlots[8]);
-
     midiCcGroup = std::make_unique<juce::GroupComponent>();
     midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
     midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
@@ -97,21 +108,21 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
 
     midiCcTarget = std::make_unique<juce::ComboBox>();
     const juce::StringArray parameterIds {
-        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+        "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     const juce::StringArray parameterNames {
-        "VCO 1 Waveform", "VCO 2 Waveform", "VCO 1 Octave", "VCO 1 Tune", "VCO 1 Level",
-        "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "Hard Sync", "Cross Modulation",
+        "VCO 1 Waveform", "VCO 2 Waveform", "VCO 1 Octave", "VCO 1 Tune", "VCO 1 Level", "VCO 1 Pulse Width",
+        "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "VCO 2 Pulse Width", "Hard Sync", "Cross Modulation",
         "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
-        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth",
-        "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
+        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth", "LFO Pulse Depth",
+        "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Chorus Rate", "Chorus Depth", "Chorus Mix", "Delay Time", "Delay Feedback", "Delay Mix", "Reverb Mix", "Reverb Room", "Reverb Damping", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
         "Filter Env Route", "Amp Env Route"
     };
     for (int i = 0; i < parameterIds.size(); ++i)
@@ -125,12 +136,12 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     midiCcLearnButton = std::make_unique<juce::TextButton>("LEARN CC");
     midiCcLearnButton->onClick = [this] {
         const juce::StringArray parameterIds {
-            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-            "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+            "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-            "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -142,12 +153,12 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     midiCcClearButton = std::make_unique<juce::TextButton>("CLEAR");
     midiCcClearButton->onClick = [this] {
         const juce::StringArray parameterIds {
-            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-            "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+            "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+            "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-            "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+            "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
         const auto index = midiCcTarget->getSelectedId() - 1;
@@ -296,12 +307,12 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
 {
     const auto index = midiCcTarget->getSelectedId() - 1;
     const juce::StringArray parameterIds {
-        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level",
-        "osc2Octave", "osc2Tune", "osc2Level", "hardSync", "crossMod",
+        "osc1Wave", "osc2Wave", "osc1Octave", "osc1Tune", "osc1Level", "osc1PulseWidth",
+        "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth",
-        "master", "unisonVoices", "unisonDetune", "stereoSpread", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+        "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
     if (synthProcessor.isMidiCcLearning())
@@ -322,22 +333,27 @@ void WebPlaySynthAudioProcessorEditor::resized()
     if (groups.size() != 9 || groupSlots.size() != 9)
         return;
 
-    presetSelector->setBounds(getWidth() - 485, 12, 165, 24);
     auto area = getLocalBounds().reduced(16);
-    area.removeFromTop(58);
+    presetSelector->setBounds(getWidth() - 205, 55, 185, 24);
+    area.removeFromTop(82);
     const auto gap = 10;
     auto mappingArea = area.removeFromBottom(88);
     area.removeFromBottom(gap);
     const auto columnWidth = (area.getWidth() - gap * 2) / 3;
     const auto rowHeight = (area.getHeight() - gap * 2) / 3;
-    const auto x1 = area.getX(), x2 = x1 + columnWidth + gap, x3 = x2 + columnWidth + gap;
-    const auto y1 = area.getY(), y2 = y1 + rowHeight + gap, y3 = y2 + rowHeight + gap;
+    const auto x1 = area.getX();
+    const auto x2 = x1 + columnWidth + gap;
+    const auto x3 = x2 + columnWidth + gap;
+    const auto y1 = area.getY();
+    const auto y2 = y1 + rowHeight + gap;
+    const auto y3 = y2 + rowHeight + gap;
+
     layoutGroup(0, { x1, y1, columnWidth, rowHeight }, 2);
     layoutGroup(1, { x2, y1, columnWidth, rowHeight }, 3);
     layoutGroup(2, { x3, y1, columnWidth, rowHeight }, 3);
     layoutGroup(3, { x1, y2, columnWidth, rowHeight }, 2);
     layoutGroup(4, { x2, y2, columnWidth, rowHeight }, 2);
-    layoutGroup(5, { x3, y2, columnWidth, rowHeight }, 2);
+    layoutGroup(5, { x3, y2, columnWidth, rowHeight }, 3);
     layoutGroup(6, { x1, y3, columnWidth, rowHeight }, 3);
     layoutGroup(7, { x2, y3, columnWidth, rowHeight }, 2);
     layoutGroup(8, { x3, y3, columnWidth, rowHeight }, 3);
