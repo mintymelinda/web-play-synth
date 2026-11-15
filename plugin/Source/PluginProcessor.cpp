@@ -99,8 +99,8 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         currentFilterType = p.filterType;
     }
 
-    const auto base1=currentFrequency*std::pow(2.0,(p.osc1Octave*12.0+p.osc1Tune)/12.0);
-    const auto base2=currentFrequency*std::pow(2.0,(p.osc2Octave*12.0+p.osc2Tune)/12.0);
+    const auto base1=currentFrequency*p.osc1FrequencyRatio;
+    const auto base2=currentFrequency*p.osc2FrequencyRatio;
     const auto lfo=waveformSample(lfoPhase,p.lfoWave);
     lfoPhase+=p.lfoRate/sr;
     if(lfoPhase>=1) lfoPhase-=std::floor(lfoPhase);
@@ -117,8 +117,8 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         if (p.hardSync) {
             // The browser engine builds a saw-shaped PeriodicWave from the
             // oscillator frequency ratio, overriding VCO 2's selected waveform.
-            const auto syncRatio=juce::jlimit(0.25,8.0,base2/base1);
-            const auto syncMasterFrequency=juce::jlimit(10.0,20000.0,base1+mod);
+            const auto syncRatio=p.hardSyncRatio;
+            const auto syncMasterFrequency=juce::jlimit(10.0,20000.0,f1);
             const auto syncPhase=phase2[static_cast<size_t>(layer)]*syncRatio;
             const auto wrappedSyncPhase=syncPhase-std::floor(syncPhase);
             const auto syncIncrement=juce::jlimit(0.0001,0.49,syncRatio*syncMasterFrequency/sr);
@@ -139,7 +139,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         phase1[static_cast<size_t>(layer)]+=increment1;
         if(phase1[static_cast<size_t>(layer)]>=1) phase1[static_cast<size_t>(layer)]-=std::floor(phase1[static_cast<size_t>(layer)]);
         const auto phase2Increment = p.hardSync
-            ? juce::jlimit(10.0,20000.0,base1+mod)/sr
+            ? f1/sr
             : inc2;
         phase2[static_cast<size_t>(layer)]+=phase2Increment;
         if(phase2[static_cast<size_t>(layer)]>=1) phase2[static_cast<size_t>(layer)]-=std::floor(phase2[static_cast<size_t>(layer)]);
@@ -381,6 +381,9 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     p.glideCoefficient=p.glideEnabled
         ? 1.0-std::exp(-std::log(1000.0)/(static_cast<double>(p.glideTime)*currentSampleRate))
         : 1.0;
+    p.osc1FrequencyRatio=std::pow(2.0,(p.osc1Octave*12.0+p.osc1Tune)/12.0);
+    p.osc2FrequencyRatio=std::pow(2.0,(p.osc2Octave*12.0+p.osc2Tune)/12.0);
+    p.hardSyncRatio=juce::jlimit(0.25,8.0,p.osc2FrequencyRatio/p.osc1FrequencyRatio);
     p.filterDriveGain=std::pow(10.0f,p.filterDrive/20.0f);
     const auto unisonCount=1<<juce::jlimit(0,2,p.unisonVoices);
     const auto layerGain=1.0f/std::sqrt(static_cast<float>(unisonCount));

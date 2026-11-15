@@ -52,4 +52,13 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthEnvelopePathTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthEnvelopePathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-envelope-audio-paths COMMAND WebPlaySynthEnvelopePathTest)
+
+    add_executable(WebPlaySynthHardSyncUnisonTest tests/HardSyncUnisonTest.cpp)
+    target_include_directories(WebPlaySynthHardSyncUnisonTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthHardSyncUnisonTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthHardSyncUnisonTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-hard-sync-unison COMMAND WebPlaySynthHardSyncUnisonTest)
 endif()
