@@ -12,9 +12,9 @@ const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
         "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth", "aftertouchDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
-        "filterEnvEnabled", "ampEnvEnabled", "aftertouchDepth"
+        "filterEnvEnabled", "ampEnvEnabled"
     };
     return ids;
 }
