@@ -246,6 +246,25 @@ void WebPlaySynthAudioProcessorEditor::paint(juce::Graphics& g)
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(10.0f)));
     g.drawText("HOST AUTOMATABLE  •  16 VOICE POLYPHONY", getWidth() - 310, 18, 290, 20, juce::Justification::right);
+
+    const auto inputEnabled = synthProcessor.getChannelCountOfBus(true, 0) > 0;
+    const auto inputRms = synthProcessor.getPitchInputRms();
+    const auto meterBounds = juce::Rectangle<float>(static_cast<float>(getWidth() - 300), 47.0f, 280.0f, 8.0f);
+    g.setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
+    g.setColour(inputEnabled ? cyan : muted);
+    g.drawText(inputEnabled ? "PITCH INPUT" : "PITCH INPUT DISABLED",
+               meterBounds.getX(), 36.0f, 116.0f, 12.0f, juce::Justification::left);
+    g.setColour(border);
+    g.fillRoundedRectangle(meterBounds, 3.0f);
+    const auto meterLevel = juce::jlimit(0.0f, 1.0f, inputRms * 4.0f);
+    if (inputEnabled && meterLevel > 0.0f) {
+        g.setColour(cyan);
+        g.fillRoundedRectangle(meterBounds.withWidth(meterBounds.getWidth() * meterLevel), 3.0f);
+    }
+    g.setColour(muted);
+    g.setFont(juce::Font(juce::FontOptions(9.0f)));
+    g.drawText(juce::String(inputRms, 3), meterBounds.getRight() - 42.0f, 36.0f, 42.0f, 12.0f,
+               juce::Justification::right);
 }
 
 void WebPlaySynthAudioProcessorEditor::timerCallback()
@@ -266,6 +285,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         const auto mapping = synthProcessor.getMidiCcMappingForParameter(parameterIds[index]);
         midiCcStatus->setText(mapping.isNotEmpty() ? "Assigned to MIDI CC " + mapping : "No MIDI CC assigned", juce::dontSendNotification);
     }
+    repaint();
 }
 
 void WebPlaySynthAudioProcessorEditor::resized()
