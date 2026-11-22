@@ -98,12 +98,10 @@ jobs:
       - name: Verify audio from the built VST3 through a JUCE host
         shell: bash
         run: |
-          vst3_bundle="build/plugin/WebPlaySynth_artefacts/Release/VST3/Web Play Synth.vst3"
-          test -d "$vst3_bundle"
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run --auto-servernum ./build/plugin/WebPlaySynthVst3HostAudioTest "$vst3_bundle"
+            xvfb-run --auto-servernum ctest --test-dir build/plugin -C Release -R native-vst3-host-audio --output-on-failure
           else
-            ./build/plugin/WebPlaySynthVst3HostAudioTest "$vst3_bundle"
+            ctest --test-dir build/plugin -C Release -R native-vst3-host-audio --output-on-failure
           fi
 
       - name: Verify plugin formats and target architectures
