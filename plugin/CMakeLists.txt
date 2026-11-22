@@ -95,4 +95,7 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthVst3HostAudioTest PRIVATE cxx_std_17)
     target_compile_definitions(WebPlaySynthVst3HostAudioTest PRIVATE JUCE_PLUGINHOST_VST3=1)
     target_link_libraries(WebPlaySynthVst3HostAudioTest PRIVATE juce::juce_audio_utils)
+    add_test(NAME native-vst3-host-audio
+        COMMAND WebPlaySynthVst3HostAudioTest
+            "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/$<CONFIG>/VST3/Web Play Synth.vst3")
 endif()
