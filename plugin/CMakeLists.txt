@@ -112,4 +112,19 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthLfoAmpPanPathTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthLfoAmpPanPathTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-lfo-amp-pan-audio-paths COMMAND WebPlaySynthLfoAmpPanPathTest)
+
+    # Exercise the actual VST3 binary through JUCE's plugin-host wrapper.
+    # The direct processor tests above cannot catch wrapper/bus/MIDI integration
+    # failures that occur only after a DAW loads the exported plugin.
+    add_executable(WebPlaySynthVst3HostAudioTest tests/Vst3HostAudioTest.cpp)
+    target_compile_features(WebPlaySynthVst3HostAudioTest PRIVATE cxx_std_17)
+    target_compile_definitions(WebPlaySynthVst3HostAudioTest PRIVATE
+        JUCE_PLUGINHOST_VST3=1
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+    )
+    target_link_libraries(WebPlaySynthVst3HostAudioTest PRIVATE juce::juce_audio_utils)
+    add_test(NAME native-vst3-host-audio
+        COMMAND WebPlaySynthVst3HostAudioTest
+            "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/$<CONFIG>/VST3/Web Play Synth.vst3")
 endif()

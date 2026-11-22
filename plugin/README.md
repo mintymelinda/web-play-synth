@@ -73,7 +73,7 @@ JUCE is dual-licensed. Before distributing binaries, choose and comply with the 
 
 ## DAW compatibility
 
-CI runs Tracktion pluginval against the built VST3 at strictness level 5 on each supported OS. This adds host-like checks for plugin discovery/metadata, buses, parameter automation, state restoration, lifecycle, and processing. The existing native smoke test separately verifies MIDI note-on audio, state save/restore, note-off, and release behavior.
+CI runs Tracktion pluginval against the built VST3 at strictness level 5 on each supported OS. This adds host-like checks for plugin discovery/metadata, buses, parameter automation, state restoration, lifecycle, and processing. The native processor tests verify DSP behavior directly. A separate JUCE host integration test loads the exported VST3 bundle on Linux, Windows, and macOS, sends MIDI note-on/note-off through the plugin wrapper, measures non-silent audio at the host output, and verifies release back to silence. This specifically catches failures that direct `AudioProcessor` tests cannot detect in the built VST3 wrapper.
 
 Pluginval is a strong automated compatibility signal, not proof that every DAW works. Use this manual acceptance matrix before marking a host as supported:
 

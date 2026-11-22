@@ -95,6 +95,15 @@ jobs:
       - name: Run native audio and MIDI smoke test
         run: ctest --test-dir build/plugin -C Release --output-on-failure
 
+      - name: Verify audio from the built VST3 through a JUCE host
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run --auto-servernum ctest --test-dir build/plugin -C Release -R native-vst3-host-audio --output-on-failure
+          else
+            ctest --test-dir build/plugin -C Release -R native-vst3-host-audio --output-on-failure
+          fi
+
       - name: Verify plugin formats and target architectures
         run: >-
           python scripts/verify_native_package.py
