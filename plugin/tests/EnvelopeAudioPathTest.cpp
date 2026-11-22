@@ -16,12 +16,12 @@ struct WebPlaySynthAudioProcessorTestAccess
 
     static float ampEnvelopeValue(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].ampEnvelope.getCurrentValue();
+        return processor.voices[0].ampEnvelope.getNextSample();
     }
 
     static float filterEnvelopeValue(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].filterEnvelope.getCurrentValue();
+        return processor.voices[0].filterEnvelope.getNextSample();
     }
 };
 
