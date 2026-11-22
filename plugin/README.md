@@ -36,6 +36,14 @@ The first build fetches JUCE 8.0.6 through CMake FetchContent. The framework ver
 
 The native editor provides grouped oscillator, filter, envelope, LFO, output, glide, and routing controls. Parameters remain host-automatable and use JUCE attachments so host automation and the editor stay synchronized.
 
+## User patch files
+
+The native editor's **Save Patch** and **Load Patch** actions export and restore the complete current instrument state as a portable `.wpsynth` file. A patch includes all host-automatable synth parameters, the selected factory-program index, and native MIDI CC assignments. It does not include audio/MIDI device routing, host automation lanes, or DAW project state.
+
+The default file chooser location is the user's Documents folder under `Web Play Synth`; patches can be stored elsewhere and shared between supported desktop platforms. Loading a patch replaces the current instrument parameter values and MIDI CC map. Invalid, missing, or oversized files are rejected without applying partial state. The host's ordinary plugin state save/restore remains unchanged and continues to work independently of patch files.
+
+Automated coverage round-trips oscillator/modulation/effect parameters and a learned MIDI CC assignment, then verifies invalid-file rejection.
+
 ## CI artifacts
 
 The Linux CI job builds both VST3 and Standalone formats, runs a MIDI/audio/state smoke test, and publishes a downloadable `web-play-synth-linux-x86_64` artifact for 14 days.

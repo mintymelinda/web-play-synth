@@ -100,6 +100,79 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     };
     addAndMakeVisible(*presetSelector);
 
+    savePatchButton = std::make_unique<juce::TextButton>("SAVE PATCH");
+    loadPatchButton = std::make_unique<juce::TextButton>("LOAD PATCH");
+    for (auto* button : { savePatchButton.get(), loadPatchButton.get() }) {
+        button->setColour(juce::TextButton::buttonColourId, panel);
+        button->setColour(juce::TextButton::textColourOffId, cyan);
+        button->setColour(juce::TextButton::buttonOnColourId, border);
+        addAndMakeVisible(*button);
+    }
+
+    patchStatus = std::make_unique<juce::Label>();
+    patchStatus->setColour(juce::Label::textColourId, muted);
+    patchStatus->setFont(juce::Font(juce::FontOptions(10.0f)));
+    patchStatus->setJustificationType(juce::Justification::centredLeft);
+    patchStatus->setText("Factory patches are built in. Save your edits as .wpsynth files.", juce::dontSendNotification);
+    addAndMakeVisible(*patchStatus);
+
+    savePatchButton->onClick = [this] {
+        auto directory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Web Play Synth");
+        directory.createDirectory();
+        patchFileChooser = std::make_unique<juce::FileChooser>(
+            "Save Web Play Synth patch", directory.getChildFile("Untitled.wpsynth"), "*.wpsynth");
+        juce::Component::SafePointer<WebPlaySynthAudioProcessorEditor> safeThis(this);
+        patchFileChooser->launchAsync(juce::FileBrowserComponent::saveMode
+            | juce::FileBrowserComponent::canSelectFiles
+            | juce::FileBrowserComponent::warnAboutOverwriting,
+            [safeThis](const juce::FileChooser& chooser) {
+                if (safeThis == nullptr)
+                    return;
+                const auto selected = chooser.getResult();
+                if (selected == juce::File{})
+                    safeThis->patchStatus->setText("Patch save cancelled.", juce::dontSendNotification);
+                else {
+                    auto target = selected;
+                    if (target.getFileExtension().isEmpty())
+                        target = target.withFileExtension(".wpsynth");
+                    const auto saved = safeThis->synthProcessor.savePatchFile(target);
+                    safeThis->patchStatus->setText(saved
+                        ? "Saved: " + target.getFileName()
+                        : "Could not save patch file.", juce::dontSendNotification);
+                }
+                safeThis->patchFileChooser.reset();
+            });
+    };
+
+    loadPatchButton->onClick = [this] {
+        auto directory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Web Play Synth");
+        directory.createDirectory();
+        patchFileChooser = std::make_unique<juce::FileChooser>(
+            "Load Web Play Synth patch", directory, "*.wpsynth");
+        juce::Component::SafePointer<WebPlaySynthAudioProcessorEditor> safeThis(this);
+        patchFileChooser->launchAsync(juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectFiles,
+            [safeThis](const juce::FileChooser& chooser) {
+                if (safeThis == nullptr)
+                    return;
+                const auto selected = chooser.getResult();
+                if (selected == juce::File{})
+                    safeThis->patchStatus->setText("Patch load cancelled.", juce::dontSendNotification);
+                else {
+                    const auto loaded = safeThis->synthProcessor.loadPatchFile(selected);
+                    safeThis->patchStatus->setText(loaded
+                        ? "Loaded: " + selected.getFileName()
+                        : "Invalid or unreadable .wpsynth patch.", juce::dontSendNotification);
+                    if (loaded)
+                        safeThis->presetSelector->setSelectedId(
+                            safeThis->synthProcessor.getCurrentProgram() + 1, juce::dontSendNotification);
+                }
+                safeThis->patchFileChooser.reset();
+            });
+    };
+
     midiCcGroup = std::make_unique<juce::GroupComponent>();
     midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
     midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
@@ -335,6 +408,9 @@ void WebPlaySynthAudioProcessorEditor::resized()
 
     auto area = getLocalBounds().reduced(16);
     presetSelector->setBounds(getWidth() - 205, 55, 185, 24);
+    loadPatchButton->setBounds(getWidth() - 205 - 8 - 88, 55, 88, 24);
+    savePatchButton->setBounds(getWidth() - 205 - 8 - 88 - 6 - 88, 55, 88, 24);
+    patchStatus->setBounds(20, 55, juce::jmax(180, getWidth() - 620), 24);
     area.removeFromTop(82);
     const auto gap = 10;
     auto mappingArea = area.removeFromBottom(88);
