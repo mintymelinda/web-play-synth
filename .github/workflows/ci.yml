@@ -96,11 +96,15 @@ jobs:
         run: ctest --test-dir build/plugin -C Release --output-on-failure
 
       - name: Verify audio from the built VST3 through a JUCE host
-        if: runner.os == 'Linux'
+        shell: bash
         run: |
           vst3_bundle="build/plugin/WebPlaySynth_artefacts/Release/VST3/Web Play Synth.vst3"
           test -d "$vst3_bundle"
-          xvfb-run --auto-servernum ./build/plugin/WebPlaySynthVst3HostAudioTest "$vst3_bundle"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run --auto-servernum ./build/plugin/WebPlaySynthVst3HostAudioTest "$vst3_bundle"
+          else
+            ./build/plugin/WebPlaySynthVst3HostAudioTest "$vst3_bundle"
+          fi
 
       - name: Verify plugin formats and target architectures
         run: >-
