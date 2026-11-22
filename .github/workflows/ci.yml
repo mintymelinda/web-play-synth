@@ -22,6 +22,21 @@ jobs:
       - name: Check deployment scripts
         run: bash -n scripts/deploy.sh scripts/rollback.sh
 
+  browser-audio:
+    name: Browser audio playback (Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Test real Web Audio output
+        run: npm run test:browser
+
   native-vst3:
     name: Native VST3 (${{ matrix.platform }})
     strategy:

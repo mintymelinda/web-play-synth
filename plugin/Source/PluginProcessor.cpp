@@ -465,8 +465,8 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::
         pos = at;
     }
     renderRange(output, pos, output.getNumSamples(), p);
-    output.applyGain(p.master);
     processEffects(output,p);
+    output.applyGain(p.master);
 }
 
 void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output,const Parameters& p)
@@ -857,4 +857,43 @@ void WebPlaySynthAudioProcessor::setStateInformation(const void* data, int size)
         parameters.replaceState(juce::ValueTree::fromXml(*xml));
     }
 }
+bool WebPlaySynthAudioProcessor::savePatchFile(const juce::File& file)
+{
+    if (file == juce::File{})
+        return false;
+
+    juce::MemoryBlock state;
+    getStateInformation(state);
+    if (state.isEmpty())
+        return false;
+
+    auto output = file.createOutputStream();
+    if (output == nullptr)
+        return false;
+
+    output->setPosition(0);
+    output->truncate();
+    const auto wrote = output->write(state.getData(), state.getSize());
+    output->flush();
+    return wrote && output->getStatus().wasOk();
+}
+
+bool WebPlaySynthAudioProcessor::loadPatchFile(const juce::File& file)
+{
+    if (!file.existsAsFile() || file.getSize() <= 0
+        || file.getSize() > 1024 * 1024)
+        return false;
+
+    juce::MemoryBlock state;
+    if (!file.loadFileAsData(state) || state.isEmpty())
+        return false;
+
+    const auto xml = getXmlFromBinary(state.getData(), static_cast<int>(state.getSize()));
+    if (xml == nullptr || !xml->hasTagName(parameters.state.getType()))
+        return false;
+
+    setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    return true;
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new WebPlaySynthAudioProcessor(); }
