@@ -51,6 +51,11 @@ The default file chooser location is the user's Documents folder under `Web Play
 
 Automated coverage round-trips oscillator/modulation/effect parameters and a learned MIDI CC assignment, then verifies invalid-file rejection.
 
+## MIDI aftertouch
+
+Channel pressure affects every active voice on the addressed MIDI channel. Polyphonic key pressure affects only the matching note on that channel. The host-automatable **Aftertouch Depth** parameter controls how strongly pressure increases voice level; its default is zero so existing patches retain their original sound until the user enables the response. Pressure values are retained per channel for newly started notes and reset with MIDI controller reset/resource release.
+
+
 ## CI artifacts
 
 The Linux CI job builds both VST3 and Standalone formats, runs a MIDI/audio/state smoke test, and publishes a downloadable `web-play-synth-linux-x86_64` artifact for 14 days.
