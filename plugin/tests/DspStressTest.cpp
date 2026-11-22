@@ -99,6 +99,8 @@ void renderStressCase(double sampleRate)
     }
 
     require(energy > 0.01, "stress render must contain non-silent audio");
+    if (peak >= 64.0f)
+        std::cerr << "stress sample rate " << sampleRate << " Hz produced peak " << peak << '\\n';
     require(peak < 64.0f, "stress render must remain bounded under maximum configured processing");
     processor.releaseResources();
 }
