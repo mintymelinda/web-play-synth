@@ -1,5 +1,4 @@
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_audio_processors/format_types/juce_VST3PluginFormat.h>
 
 #include <cmath>
 #include <cstdlib>
