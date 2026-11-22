@@ -152,6 +152,11 @@ function Knob({ label, value, min, max, step = 0.01, display, onChange }: ParamP
     <span className="knob" style={{ "--angle": `${angle}deg` } as CSSProperties}>
       <input aria-label={label} type="range" min={min} max={max} step={step} value={value}
         onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+        onDoubleClick={() => {
+          const midpoint = min + (max - min) / 2;
+          const centered = min + Math.round((midpoint - min) / step) * step;
+          onChange(Math.min(max, Math.max(min, centered)));
+        }}
         onChange={(event) => onChange(Number(event.target.value))} />
       <span className="knob-face"><span className="knob-indicator" /></span>
     </span>
