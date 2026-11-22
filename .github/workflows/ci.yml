@@ -13,8 +13,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm install
@@ -26,8 +26,8 @@ jobs:
     name: Browser audio playback (Chromium)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm install
@@ -54,7 +54,7 @@ jobs:
             artifact: web-play-synth-macos-universal
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install JUCE Linux build dependencies
         if: runner.os == 'Linux'
@@ -191,8 +191,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: web-play-synth-macos-universal
           path: macos-package
@@ -253,7 +253,7 @@ jobs:
           xcrun stapler validate Web-Play-Synth-macOS.dmg
           spctl --assess --type open --context context:primary-signature --verbose=2 Web-Play-Synth-macOS.dmg
       - name: Upload signed and notarized macOS installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-play-synth-macos-signed-notarized
           path: Web-Play-Synth-macOS.dmg
@@ -268,12 +268,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Require release tag to point to main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: release-assets
       - name: Remove unsigned macOS archive from public release assets
