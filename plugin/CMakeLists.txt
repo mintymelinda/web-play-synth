@@ -91,10 +91,8 @@ if(BUILD_TESTING)
     # Exercise the actual VST3 binary through JUCE's plugin-host wrapper.
     # The direct processor tests above cannot catch wrapper/bus/MIDI integration
     # failures that occur only after a DAW loads the exported plugin.
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        add_executable(WebPlaySynthVst3HostAudioTest tests/Vst3HostAudioTest.cpp)
-        target_compile_features(WebPlaySynthVst3HostAudioTest PRIVATE cxx_std_17)
-        target_compile_definitions(WebPlaySynthVst3HostAudioTest PRIVATE JUCE_PLUGINHOST_VST3=1)
-        target_link_libraries(WebPlaySynthVst3HostAudioTest PRIVATE juce::juce_audio_utils)
-    endif()
+    add_executable(WebPlaySynthVst3HostAudioTest tests/Vst3HostAudioTest.cpp)
+    target_compile_features(WebPlaySynthVst3HostAudioTest PRIVATE cxx_std_17)
+    target_compile_definitions(WebPlaySynthVst3HostAudioTest PRIVATE JUCE_PLUGINHOST_VST3=1)
+    target_link_libraries(WebPlaySynthVst3HostAudioTest PRIVATE juce::juce_audio_utils)
 endif()
