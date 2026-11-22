@@ -34,7 +34,7 @@ test("the browser synth produces audio while a key is held and releases to silen
     analyser.getFloatTimeDomainData(samples);
     const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
     return rms > 0.005;
-  }, { timeout: 5_000 });
+  }, undefined, { timeout: 5_000 });
 
   await page.mouse.up();
 
