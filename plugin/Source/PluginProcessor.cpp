@@ -68,19 +68,47 @@ void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
     currentFilterType=0;
     ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
 }
-void WebPlaySynthAudioProcessor::Voice::start(int n,float vel,const Parameters& p,double previous)
+void WebPlaySynthAudioProcessor::Voice::start(
+    int n, float vel, int channel, float pitchBend, const Parameters& p, double previous)
 {
-    note=n; velocity=vel; keyDown=true; active=true; phase1.fill(0.0); phase2.fill(0.0); lfoPhase=0;
+    note=n;
+    velocity=vel;
+    midiChannel=juce::jlimit(1, 16, channel);
+    pitchBendSemitones=pitchBend;
+    keyDown=true;
+    sustainHeld=false;
+    active=true;
+    phase1.fill(0.0);
+    phase2.fill(0.0);
+    lfoPhase=0;
     for (auto& filter : filters) filter.reset();
-    targetFrequency=juce::MidiMessage::getMidiNoteInHertz(n);
+    targetFrequency=juce::MidiMessage::getMidiNoteInHertz(n)
+        * std::pow(2.0, static_cast<double>(pitchBendSemitones) / 12.0);
     currentFrequency=p.glideEnabled && previous>0 ? previous : targetFrequency;
     ampEnvelope.setParameters({p.ampAttack,p.ampDecay,p.ampSustain,p.ampRelease});
     filterEnvelope.setParameters({p.filterAttack,p.filterDecay,p.filterSustain,p.filterRelease});
-    ampEnvelope.noteOn(); filterEnvelope.noteOn();
+    ampEnvelope.noteOn();
+    filterEnvelope.noteOn();
+}
+void WebPlaySynthAudioProcessor::Voice::release()
+{
+    if (active && !keyDown && sustainHeld) {
+        sustainHeld=false;
+        ampEnvelope.noteOff();
+        filterEnvelope.noteOff();
+    } else if (active && !keyDown && ampEnvelope.isActive()) {
+        ampEnvelope.noteOff();
+        filterEnvelope.noteOff();
+    }
 }
 void WebPlaySynthAudioProcessor::Voice::stop()
 {
-    if(active && keyDown) { keyDown=false; ampEnvelope.noteOff(); filterEnvelope.noteOff(); }
+    if (active) {
+        keyDown=false;
+        sustainHeld=false;
+        ampEnvelope.noteOff();
+        filterEnvelope.noteOff();
+    }
 }
 void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,float& left,float& right)
 {
@@ -335,7 +363,9 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 }
 void WebPlaySynthAudioProcessor::releaseResources()
 {
-    for(auto& v:voices) { v.active=false; v.keyDown=false; }
+    for(auto& v:voices) { v.active=false; v.keyDown=false; v.sustainHeld=false; }
+    channelPitchBendSemitones.fill(0.0f);
+    sustainPedalDown.fill(false);
     reverb.reset();
     std::fill(chorusBufferLeft.begin(),chorusBufferLeft.end(),0.0f);
     std::fill(chorusBufferRight.begin(),chorusBufferRight.end(),0.0f);
@@ -548,21 +578,72 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
 {
     if (m.isController()) {
         const auto cc = m.getControllerNumber();
+        const auto channel = juce::jlimit(1, 16, m.getChannel());
+        const auto channelIndex = static_cast<size_t>(channel - 1);
         const auto learnTarget = midiCcLearnTarget.exchange(-1);
         if (learnTarget >= 0 && learnTarget < midiCcParameterIds().size()) {
-            // Deterministic one-to-one mapping: a CC and a parameter can each
-            // participate in only one assignment.
             for (auto& assignment : midiCcToParameter)
                 if (assignment.load() == learnTarget)
                     assignment.store(-1);
             midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
-
-            // The controller movement that completes learning should also
-            // establish the parameter's initial value. This avoids requiring
-            // a second physical movement before the newly learned control works.
             if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
                 parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
             return;
+        }
+
+        // Channel-mode messages are handled as performance semantics,
+        // before the generic user CC mapping layer.
+        if (cc == 120) {
+            for (auto& voice : voices) {
+                if (voice.active && voice.midiChannel == channel) {
+                    voice.active=false;
+                    voice.keyDown=false;
+                    voice.sustainHeld=false;
+                    voice.ampEnvelope.reset();
+                    voice.filterEnvelope.reset();
+                    voice.note=-1;
+                }
+            }
+            return;
+        }
+        if (cc == 123) {
+            for (auto& voice : voices) {
+                if (voice.active && voice.midiChannel == channel && voice.keyDown) {
+                    voice.keyDown=false;
+                    if (sustainPedalDown[channelIndex])
+                        voice.sustainHeld=true;
+                    else
+                        voice.release();
+                }
+            }
+            return;
+        }
+        if (cc == 121) {
+            sustainPedalDown[channelIndex]=false;
+            channelPitchBendSemitones[channelIndex]=0.0f;
+            for (auto& voice : voices) {
+                if (voice.active && voice.midiChannel == channel) {
+                    voice.targetFrequency=juce::MidiMessage::getMidiNoteInHertz(voice.note);
+                    voice.pitchBendSemitones=0.0f;
+                    if (voice.sustainHeld)
+                        voice.release();
+                }
+            }
+            return;
+        }
+
+        // Sustain is a channel performance controller, independent of the
+        // optional user CC-to-parameter mapping table.
+        if (cc == 64) {
+            const auto pedalDown = m.getControllerValue() >= 64;
+            const auto wasDown = sustainPedalDown[channelIndex];
+            sustainPedalDown[channelIndex] = pedalDown;
+            if (wasDown && !pedalDown) {
+                for (auto& voice : voices) {
+                    if (voice.active && voice.midiChannel == channel && voice.sustainHeld)
+                        voice.release();
+                }
+            }
         }
 
         const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
@@ -573,9 +654,30 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
         return;
     }
 
-    if(m.isNoteOn()) startNote(m.getNoteNumber(),m.getFloatVelocity(),p);
-    else if(m.isNoteOff()) stopNote(m.getNoteNumber());
-    else if(m.isAllNotesOff()||m.isAllSoundOff()) for(auto& v:voices) v.stop();
+    if (m.isPitchWheel()) {
+        const auto channel = juce::jlimit(1, 16, m.getChannel());
+        const auto channelIndex = static_cast<size_t>(channel - 1);
+        const auto bend = (static_cast<float>(m.getPitchWheelValue()) - 8192.0f) / 8192.0f * 2.0f;
+        channelPitchBendSemitones[channelIndex] = bend;
+        for (auto& voice : voices) {
+            if (voice.active && voice.midiChannel == channel) {
+                voice.pitchBendSemitones = bend;
+                voice.targetFrequency = juce::MidiMessage::getMidiNoteInHertz(voice.note)
+                    * std::pow(2.0, static_cast<double>(bend) / 12.0);
+            }
+        }
+        return;
+    }
+
+    if (m.isNoteOn())
+        startNote(m.getNoteNumber(), m.getFloatVelocity(), m.getChannel(), p);
+    else if (m.isNoteOff())
+        stopNote(m.getNoteNumber(), m.getChannel());
+    else if (m.isAllNotesOff() || m.isAllSoundOff()) {
+        for (auto& voice : voices)
+            if (voice.active && voice.midiChannel == m.getChannel())
+                voice.stop();
+    }
 }
 
 void WebPlaySynthAudioProcessor::setMidiCcLearnTarget(const juce::String& parameterId)
@@ -615,11 +717,29 @@ WebPlaySynthAudioProcessor::Voice* WebPlaySynthAudioProcessor::findVoiceToStart(
     for(auto& v:voices) if(!v.active) return &v;
     auto* oldest=&voices.front(); for(auto& v:voices) if(v.age<oldest->age) oldest=&v; return oldest;
 }
-void WebPlaySynthAudioProcessor::startNote(int n,float vel,const Parameters& p)
+void WebPlaySynthAudioProcessor::startNote(int n, float vel, int channel, const Parameters& p)
 {
-    auto* v=findVoiceToStart(); v->age=++voiceAge; v->start(n,vel,p,lastPlayedFrequency); lastPlayedFrequency=juce::MidiMessage::getMidiNoteInHertz(n);
+    const auto safeChannel = juce::jlimit(1, 16, channel);
+    const auto bend = channelPitchBendSemitones[static_cast<size_t>(safeChannel - 1)];
+    auto* voice = findVoiceToStart();
+    voice->age=++voiceAge;
+    voice->start(n, vel, safeChannel, bend, p, lastPlayedFrequency);
+    lastPlayedFrequency=juce::MidiMessage::getMidiNoteInHertz(n);
 }
-void WebPlaySynthAudioProcessor::stopNote(int n) { for(auto& v:voices) if(v.active&&v.note==n) v.stop(); }
+void WebPlaySynthAudioProcessor::stopNote(int n, int channel)
+{
+    const auto safeChannel = juce::jlimit(1, 16, channel);
+    const auto pedalDown = sustainPedalDown[static_cast<size_t>(safeChannel - 1)];
+    for (auto& voice : voices) {
+        if (voice.active && voice.note == n && voice.midiChannel == safeChannel && voice.keyDown) {
+            voice.keyDown=false;
+            if (pedalDown)
+                voice.sustainHeld=true;
+            else
+                voice.release();
+        }
+    }
+}
 float WebPlaySynthAudioProcessor::polyBlep(double t,double dt)
 {
     if (dt <= 0)
