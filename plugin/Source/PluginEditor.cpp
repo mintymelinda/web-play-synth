@@ -78,6 +78,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     addKnob("stereoSpread", "STEREO SPREAD", groupSlots[6]);
     addToggle("glideEnabled", "GLOBAL GLIDE", groupSlots[6]);
     addKnob("glideTime", "GLIDE TIME", groupSlots[6]);
+    addKnob("aftertouchDepth", "AFTERTOUCH DEPTH", groupSlots[6]);
 
     addGroup("PATCH ROUTING  /  SIGNAL SWITCHES", groupSlots[7]);
     addToggle("vco1Enabled", "VCO 1 AUDIO", groupSlots[7]);
@@ -111,6 +112,79 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
     };
     addAndMakeVisible(*presetSelector);
 
+    savePatchButton = std::make_unique<juce::TextButton>("SAVE PATCH");
+    loadPatchButton = std::make_unique<juce::TextButton>("LOAD PATCH");
+    for (auto* button : { savePatchButton.get(), loadPatchButton.get() }) {
+        button->setColour(juce::TextButton::buttonColourId, panel);
+        button->setColour(juce::TextButton::textColourOffId, cyan);
+        button->setColour(juce::TextButton::buttonOnColourId, border);
+        addAndMakeVisible(*button);
+    }
+
+    patchStatus = std::make_unique<juce::Label>();
+    patchStatus->setColour(juce::Label::textColourId, muted);
+    patchStatus->setFont(juce::Font(juce::FontOptions(10.0f)));
+    patchStatus->setJustificationType(juce::Justification::centredLeft);
+    patchStatus->setText("Factory patches are built in. Save your edits as .wpsynth files.", juce::dontSendNotification);
+    addAndMakeVisible(*patchStatus);
+
+    savePatchButton->onClick = [this] {
+        auto directory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Web Play Synth");
+        directory.createDirectory();
+        patchFileChooser = std::make_unique<juce::FileChooser>(
+            "Save Web Play Synth patch", directory.getChildFile("Untitled.wpsynth"), "*.wpsynth");
+        juce::Component::SafePointer<WebPlaySynthAudioProcessorEditor> safeThis(this);
+        patchFileChooser->launchAsync(juce::FileBrowserComponent::saveMode
+            | juce::FileBrowserComponent::canSelectFiles
+            | juce::FileBrowserComponent::warnAboutOverwriting,
+            [safeThis](const juce::FileChooser& chooser) {
+                if (safeThis == nullptr)
+                    return;
+                const auto selected = chooser.getResult();
+                if (selected == juce::File{})
+                    safeThis->patchStatus->setText("Patch save cancelled.", juce::dontSendNotification);
+                else {
+                    auto target = selected;
+                    if (target.getFileExtension().isEmpty())
+                        target = target.withFileExtension(".wpsynth");
+                    const auto saved = safeThis->synthProcessor.savePatchFile(target);
+                    safeThis->patchStatus->setText(saved
+                        ? "Saved: " + target.getFileName()
+                        : "Could not save patch file.", juce::dontSendNotification);
+                }
+                safeThis->patchFileChooser.reset();
+            });
+    };
+
+    loadPatchButton->onClick = [this] {
+        auto directory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Web Play Synth");
+        directory.createDirectory();
+        patchFileChooser = std::make_unique<juce::FileChooser>(
+            "Load Web Play Synth patch", directory, "*.wpsynth");
+        juce::Component::SafePointer<WebPlaySynthAudioProcessorEditor> safeThis(this);
+        patchFileChooser->launchAsync(juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectFiles,
+            [safeThis](const juce::FileChooser& chooser) {
+                if (safeThis == nullptr)
+                    return;
+                const auto selected = chooser.getResult();
+                if (selected == juce::File{})
+                    safeThis->patchStatus->setText("Patch load cancelled.", juce::dontSendNotification);
+                else {
+                    const auto loaded = safeThis->synthProcessor.loadPatchFile(selected);
+                    safeThis->patchStatus->setText(loaded
+                        ? "Loaded: " + selected.getFileName()
+                        : "Invalid or unreadable .wpsynth patch.", juce::dontSendNotification);
+                    if (loaded)
+                        safeThis->presetSelector->setSelectedId(
+                            safeThis->synthProcessor.getCurrentProgram() + 1, juce::dontSendNotification);
+                }
+                safeThis->patchFileChooser.reset();
+            });
+    };
+
     midiCcGroup = std::make_unique<juce::GroupComponent>();
     midiCcGroup->setText("MIDI CC  /  NATIVE PARAMETER MAPPING");
     midiCcGroup->setColour(juce::GroupComponent::outlineColourId, border);
@@ -123,7 +197,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth", "aftertouchDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
@@ -132,7 +206,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
         "VCO 2 Octave", "VCO 2 Tune", "VCO 2 Level", "VCO 2 Pulse Width", "Hard Sync", "Cross Modulation",
         "Filter Cutoff", "Filter Resonance", "Filter Contour", "Filter Mode", "Filter Drive", "Filter Env Attack", "Filter Env Decay",
         "Filter Env Sustain", "Filter Env Release", "Amp Env Attack", "Amp Env Decay", "Amp Env Sustain",
-        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth", "LFO Pulse Depth",
+        "Amp Env Release", "LFO Waveform", "LFO Rate", "LFO Pitch Depth", "LFO Filter Depth", "LFO Amp Depth", "LFO Pan Depth", "LFO Pulse Depth", "Aftertouch Depth",
         "Master Level", "Unison Voices", "Unison Detune", "Stereo Spread", "Chorus Rate", "Chorus Depth", "Chorus Mix", "Delay Time", "Delay Feedback", "Delay Mix", "Reverb Mix", "Reverb Room", "Reverb Damping", "Global Glide", "Glide Time", "VCO 1 Audio Route", "VCO 2 Audio Route",
         "Filter Env Route", "Amp Env Route"
     };
@@ -151,7 +225,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth", "aftertouchDepth",
             "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
@@ -168,7 +242,7 @@ WebPlaySynthAudioProcessorEditor::WebPlaySynthAudioProcessorEditor(WebPlaySynthA
             "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
             "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
             "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+            "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth", "aftertouchDepth",
             "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
             "filterEnvEnabled", "ampEnvEnabled"
         };
@@ -352,7 +426,7 @@ void WebPlaySynthAudioProcessorEditor::timerCallback()
         "osc2Octave", "osc2Tune", "osc2Level", "osc2PulseWidth", "hardSync", "crossMod",
         "cutoff", "resonance", "filterContour", "filterType", "filterDrive", "filterAttack", "filterDecay",
         "filterSustain", "filterRelease", "ampAttack", "ampDecay", "ampSustain",
-        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth",
+        "ampRelease", "lfoWave", "lfoRate", "lfoPitchDepth", "lfoFilterDepth", "lfoAmpDepth", "lfoPanDepth", "lfoPulseDepth", "aftertouchDepth",
         "master", "unisonVoices", "unisonDetune", "stereoSpread", "chorusRate", "chorusDepth", "chorusMix", "delayTime", "delayFeedback", "delayMix", "reverbMix", "reverbRoom", "reverbDamping", "glideEnabled", "glideTime", "vco1Enabled", "vco2Enabled",
         "filterEnvEnabled", "ampEnvEnabled"
     };
@@ -380,6 +454,10 @@ void WebPlaySynthAudioProcessorEditor::resized()
 
     auto area = getLocalBounds().reduced(16);
     area.removeFromTop(112);
+    loadPatchButton->setBounds(getWidth() - 205 - 8 - 88, 55, 88, 24);
+    savePatchButton->setBounds(getWidth() - 205 - 8 - 88 - 6 - 88, 55, 88, 24);
+    patchStatus->setBounds(20, 55, juce::jmax(180, getWidth() - 620), 24);
+    area.removeFromTop(82);
     const auto gap = 10;
     auto mappingArea = area.removeFromBottom(88);
     area.removeFromBottom(gap);
