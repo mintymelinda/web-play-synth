@@ -187,8 +187,13 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         }
     }
 
-    const auto amp=p.ampEnvEnabled?ampEnvelope.getNextSample():1.0f;
-    const auto env=p.filterEnvEnabled?filterEnvelope.getNextSample():0.0f;
+    // Advance both envelopes regardless of routing. Bypass changes only the
+    // signal contribution; envelope state must keep progressing so note-off
+    // can retire voices and re-enabling a route cannot resume stale state.
+    const auto ampEnvelopeValue=ampEnvelope.getNextSample();
+    const auto filterEnvelopeValue=filterEnvelope.getNextSample();
+    const auto amp=p.ampEnvEnabled?ampEnvelopeValue:1.0f;
+    const auto env=p.filterEnvEnabled?filterEnvelopeValue:0.0f;
     const auto cutoff=juce::jlimit(30.0f,19000.0f,p.cutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
     const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * p.filterDriveGain) : mixLeft;
     const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * p.filterDriveGain) : mixRight;

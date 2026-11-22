@@ -41,6 +41,7 @@ public:
     bool isMidiCcLearning() const noexcept { return midiCcLearnTarget.load() >= 0; }
 
 private:
+    friend struct WebPlaySynthAudioProcessorTestAccess;
     static const juce::StringArray& midiCcParameterIds();
     std::array<std::atomic<int>, 128> midiCcToParameter {};
     std::atomic<int> midiCcLearnTarget { -1 };
