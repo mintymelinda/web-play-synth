@@ -70,6 +70,15 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthDspStressTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthDspStressTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-dsp-stress-matrix COMMAND WebPlaySynthDspStressTest)
+
+    add_executable(WebPlaySynthDspAuditTest tests/DspAuditTest.cpp)
+    target_include_directories(WebPlaySynthDspAuditTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthDspAuditTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthDspAuditTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    add_test(NAME native-dsp-audit COMMAND WebPlaySynthDspAuditTest)
     add_executable(WebPlaySynthMidiExpressionTest tests/MidiExpressionPerformanceTest.cpp)
     target_include_directories(WebPlaySynthMidiExpressionTest PRIVATE
         Source
