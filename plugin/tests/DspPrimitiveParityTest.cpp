@@ -217,6 +217,75 @@ void testAmpEnvelopeMatchesJuceAdsr()
     }
 }
 
+void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
+{
+    constexpr float attack = 0.007f;
+    constexpr float decay = 0.012f;
+    constexpr float sustain = 0.35f;
+    constexpr float release = 0.02f;
+    constexpr float baseCutoff = 1200.0f;
+    constexpr float contour = 0.45f;
+    constexpr float velocity = 0.8f;
+    constexpr int noteOffSample = 240;
+    constexpr int blockCount = 6;
+
+    const auto actual = render([](WebPlaySynthAudioProcessor& processor) {
+        configureCommon(processor);
+        setParameter(processor, "filterEnvEnabled", 1.0f);
+        setParameter(processor, "filterContour", contour);
+        setParameter(processor, "cutoff", baseCutoff);
+        setParameter(processor, "filterAttack", attack);
+        setParameter(processor, "filterDecay", decay);
+        setParameter(processor, "filterSustain", sustain);
+        setParameter(processor, "filterRelease", release);
+    }, blockCount, noteOffSample);
+
+    juce::ADSR referenceEnvelope;
+    referenceEnvelope.setSampleRate(sampleRate);
+    referenceEnvelope.setParameters({ attack, decay, sustain, release });
+    referenceEnvelope.noteOn();
+
+    juce::dsp::StateVariableTPTFilter<float> leftFilter;
+    juce::dsp::StateVariableTPTFilter<float> rightFilter;
+    const juce::dsp::ProcessSpec spec {
+        sampleRate, static_cast<juce::uint32>(blockSize), 1
+    };
+    leftFilter.prepare(spec);
+    rightFilter.prepare(spec);
+    leftFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    rightFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    leftFilter.reset();
+    rightFilter.reset();
+    leftFilter.setResonance(0.1f);
+    rightFilter.setResonance(0.1f);
+
+    double oscillatorPhase = 0.0;
+    constexpr double oscillatorIncrement = 440.0 / sampleRate;
+    for (int sample = 0; sample < blockCount * blockSize; ++sample) {
+        if (sample == noteOffSample)
+            referenceEnvelope.noteOff();
+
+        const auto envelope = referenceEnvelope.getNextSample();
+        const auto cutoff = juce::jlimit(30.0f, 19000.0f,
+            baseCutoff * static_cast<float>(std::pow(2.0, contour * envelope * 3.0)));
+        leftFilter.setCutoffFrequency(cutoff);
+        rightFilter.setCutoffFrequency(cutoff);
+
+        const auto oscillator = webplaysynth::dsp::oscillatorSample(
+            oscillatorPhase, oscillatorIncrement, 0);
+        oscillatorPhase += oscillatorIncrement;
+        if (oscillatorPhase >= 1.0)
+            oscillatorPhase -= std::floor(oscillatorPhase);
+
+        const auto expectedLeft = leftFilter.processSample(0, oscillator) * velocity;
+        const auto expectedRight = rightFilter.processSample(0, oscillator) * velocity;
+        require(std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft) < 3.0e-6f,
+            "filter-envelope rendered left channel must match JUCE ADSR and TPT filter");
+        require(std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight) < 3.0e-6f,
+            "filter-envelope rendered right channel must match JUCE ADSR and TPT filter");
+    }
+}
+
 void testLfoAmplitudeMatchesRenderedReference()
 {
     constexpr float rate = 4.5f;
@@ -255,6 +324,7 @@ int main()
 {
     testPortableAdsrMatchesJuceStateMachine();
     testAmpEnvelopeMatchesJuceAdsr();
+    testFilterEnvelopeRenderedOutputMatchesJuceAdsr();
     testLfoAmplitudeMatchesRenderedReference();
     std::cout << "PASS: JUCE ADSR and LFO amplitude rendered-output parity\n";
     return 0;
