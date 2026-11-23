@@ -118,7 +118,8 @@ void WebPlaySynthAudioProcessor::Voice::stop()
         filterEnvelope.noteOff();
     }
 }
-void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,float& left,float& right)
+void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,float& left,float& right,
+    float* oscillatorLeft,float* oscillatorRight)
 {
     left=0.0f;
     right=0.0f;
@@ -193,6 +194,11 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
             mixRight+=oscillatorMix*p.unisonRightGains[static_cast<size_t>(layer)];
         }
     }
+
+    if (oscillatorLeft != nullptr)
+        *oscillatorLeft = mixLeft;
+    if (oscillatorRight != nullptr)
+        *oscillatorRight = mixRight;
 
     // Advance both envelopes regardless of routing. Bypass changes only the
     // signal contribution; envelope state must keep progressing so note-off
