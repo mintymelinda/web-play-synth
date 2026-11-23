@@ -36,6 +36,22 @@ struct WebPlaySynthAudioProcessorTestAccess {
                   << ", lfoPhase=" << voice.lfoPhase
                   << ", oscillatorPhase=" << voice.phase1[0] << '\n';
     }
+
+    static void printProcessState(const WebPlaySynthAudioProcessor& processor)
+    {
+        const auto parameters = processor.readParameters();
+        std::cerr << "process-state: master=" << parameters.master
+                  << ", chorusMix=" << parameters.chorusMix
+                  << ", delayMix=" << parameters.delayMix
+                  << ", reverbMix=" << parameters.reverbMix << '\n';
+        for (size_t index = 0; index < processor.voices.size(); ++index) {
+            const auto& voice = processor.voices[index];
+            if (voice.active)
+                std::cerr << "active-voice[" << index << "]: velocity=" << voice.velocity
+                          << ", note=" << voice.note << ", frequency=" << voice.currentFrequency
+                          << ", phase=" << voice.phase1[0] << '\n';
+        }
+    }
 };
 
 namespace {
