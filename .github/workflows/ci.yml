@@ -59,6 +59,14 @@ jobs:
             ccache \
             ninja-build
 
+      - name: Cache JUCE source checkout
+        uses: actions/cache@v4
+        with:
+          path: build/plugin/_deps/juce-src
+          key: juce-8.0.6-linux-${{ runner.arch }}
+          restore-keys: |
+            juce-8.0.6-linux-
+
       - name: Cache C++ compiler outputs
         uses: actions/cache@v4
         with:
