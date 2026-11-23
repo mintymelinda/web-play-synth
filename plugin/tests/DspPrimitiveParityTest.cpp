@@ -114,7 +114,7 @@ StereoRender render(Configure configure, int blockCount, int noteOffSample = -1)
         processor.processBlock(output, midi);
         if (block == 0)
             std::cout << "Active voices after first MIDI block: "
-                      << WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor) << '\\n';
+                      << WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor) << '\n';
         result.voiceLfoPhaseAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceLfoPhase(processor));
         result.voiceOscillatorPhaseAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceOscillatorPhase(processor));
         result.voiceFrequencyAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceFrequency(processor));
@@ -534,7 +534,7 @@ void assertLfoDestinationMatchesRenderedReference(
                           << ", expectedOsc=" << oscillatorPhase
                           << ", actualOsc=" << actual.voiceOscillatorPhaseAtBlockEnd[blockIndex]
                           << ", actualFrequency=" << actual.voiceFrequencyAtBlockEnd[blockIndex]
-                          << '\\n';
+                          << '\n';
             }
         }
     }
