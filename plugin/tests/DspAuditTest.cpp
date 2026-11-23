@@ -248,13 +248,22 @@ void testNoAudioThreadAllocations()
 
     processor.processBlock(output, midi);
     midi.clear();
+
+    processor.setMidiCcLearnTarget("master");
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 7, 64), 0);
+    processor.processBlock(output, midi);
+    midi.clear();
+    midi.addEvent(juce::MidiMessage::controllerEvent(1, 7, 96), 0);
     for (int block = 0; block < 16; ++block)
         processor.processBlock(output, midi);
 
     allocationCount.store(0, std::memory_order_relaxed);
     countAllocations.store(true, std::memory_order_relaxed);
-    for (int block = 0; block < 128; ++block)
+    for (int block = 0; block < 128; ++block) {
+        midi.clear();
+        midi.addEvent(juce::MidiMessage::controllerEvent(1, 7, 96), 0);
         processor.processBlock(output, midi);
+    }
     countAllocations.store(false, std::memory_order_relaxed);
 
     const auto allocations = allocationCount.load(std::memory_order_relaxed);
