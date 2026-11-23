@@ -2,18 +2,52 @@
 #include "Dsp/Oscillator.h"
 #include "Dsp/Envelope.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <iostream>
 #include <functional>
+#include <iomanip>
+#include <iostream>
 #include <vector>
 
 struct WebPlaySynthAudioProcessorTestAccess {
-    static void startVoice(WebPlaySynthAudioProcessor& processor)
+    static double voiceLfoPhase(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].lfoPhase;
+    }
+
+    static double voiceOscillatorPhase(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].phase1[0];
+    }
+
+    static double voiceFrequency(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].currentFrequency;
+    }
+
+    static int activeVoiceCount(const WebPlaySynthAudioProcessor& processor)
+    {
+        int count = 0;
+        for (const auto& voice : processor.voices)
+            if (voice.active)
+                ++count;
+        return count;
+    }
+
+    static void startVoice(WebPlaySynthAudioProcessor& processor, float velocity = 0.8f)
     {
         processor.prepareToPlay(48000.0, 128);
         const auto parameters = processor.readParameters();
-        processor.voices[0].start(69, 0.8f, 1, 0.0f, 0.0f, parameters, 0.0);
+        processor.voices[0].start(69, velocity, 1, 0.0f, 0.0f, parameters, 0.0);
+    }
+
+    static void renderDirectVoiceSample(WebPlaySynthAudioProcessor& processor,
+        float& left, float& right, float& oscillatorLeft, float& oscillatorRight)
+    {
+        const auto parameters = processor.readParameters();
+        processor.voices[0].render(parameters, 48000.0, left, right,
+            &oscillatorLeft, &oscillatorRight);
     }
 
     static void renderVoiceSample(WebPlaySynthAudioProcessor& processor, bool noteOff,
@@ -49,6 +83,9 @@ void setParameter(WebPlaySynthAudioProcessor& processor, const char* id, float v
 struct StereoRender {
     std::vector<float> left;
     std::vector<float> right;
+    std::vector<double> voiceLfoPhaseAtBlockEnd;
+    std::vector<double> voiceOscillatorPhaseAtBlockEnd;
+    std::vector<double> voiceFrequencyAtBlockEnd;
 };
 
 template <typename Configure>
@@ -75,6 +112,12 @@ StereoRender render(Configure configure, int blockCount, int noteOffSample = -1)
             midi.addEvent(juce::MidiMessage::noteOff(1, 69), noteOffSample - blockStart);
 
         processor.processBlock(output, midi);
+        if (block == 0)
+            std::cout << "Active voices after first MIDI block: "
+                      << WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor) << '\n';
+        result.voiceLfoPhaseAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceLfoPhase(processor));
+        result.voiceOscillatorPhaseAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceOscillatorPhase(processor));
+        result.voiceFrequencyAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceFrequency(processor));
         for (int sample = 0; sample < blockSize; ++sample) {
             const auto left = output.getSample(0, sample);
             const auto right = output.getSample(1, sample);
@@ -305,6 +348,227 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
     processor.releaseResources();
 }
 
+struct ErrorStats {
+    size_t count = 0;
+    double mean = 0.0;
+    double sumSquared = 0.0;
+    double m2 = 0.0;
+    double maxAbsolute = 0.0;
+
+    void add(double error)
+    {
+        ++count;
+        const auto delta = error - mean;
+        mean += delta / static_cast<double>(count);
+        m2 += delta * (error - mean);
+        sumSquared += error * error;
+        maxAbsolute = std::max(maxAbsolute, std::abs(error));
+    }
+
+    double standardDeviation() const
+    {
+        return count == 0 ? 0.0 : std::sqrt(m2 / static_cast<double>(count));
+    }
+
+    double rms() const
+    {
+        return count == 0 ? 0.0 : std::sqrt(sumSquared / static_cast<double>(count));
+    }
+};
+
+void assertLfoDestinationMatchesRenderedReference(
+    int oscillatorWave,
+    float pitchDepth,
+    float filterDepth,
+    float ampDepth,
+    float panDepth,
+    float pulseDepth,
+    float baseCutoff,
+    const char* scenario)
+{
+    constexpr float rate = 4.5f;
+    constexpr float velocity = 0.8f;
+    const auto midiVelocity = juce::MidiMessage::noteOn(1, 69, velocity).getFloatVelocity();
+    constexpr int blockCount = 128;
+
+    const auto actual = render([=](WebPlaySynthAudioProcessor& processor) {
+        configureCommon(processor);
+        setParameter(processor, "osc1Wave", static_cast<float>(oscillatorWave));
+        setParameter(processor, "osc1Level", 1.0f);
+        setParameter(processor, "osc1PulseWidth", 0.5f);
+        setParameter(processor, "cutoff", baseCutoff);
+        setParameter(processor, "lfoRate", rate);
+        setParameter(processor, "lfoPitchDepth", pitchDepth);
+        setParameter(processor, "lfoFilterDepth", filterDepth);
+        setParameter(processor, "lfoAmpDepth", ampDepth);
+        setParameter(processor, "lfoPanDepth", panDepth);
+        setParameter(processor, "lfoPulseDepth", pulseDepth);
+    }, blockCount);
+
+    juce::dsp::StateVariableTPTFilter<float> leftFilter;
+    juce::dsp::StateVariableTPTFilter<float> rightFilter;
+    const juce::dsp::ProcessSpec spec {
+        sampleRate, static_cast<juce::uint32>(blockSize), 1
+    };
+    leftFilter.prepare(spec);
+    rightFilter.prepare(spec);
+    leftFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    rightFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    leftFilter.reset();
+    rightFilter.reset();
+    leftFilter.setResonance(0.1f);
+    rightFilter.setResonance(0.1f);
+
+    // Render the same configured voice directly, bypassing MIDI dispatch and
+    // processBlock aggregation. This isolates voice DSP from processor routing.
+    WebPlaySynthAudioProcessor directProcessor;
+    directProcessor.prepareToPlay(sampleRate, blockSize);
+    configureCommon(directProcessor);
+    setParameter(directProcessor, "osc1Wave", static_cast<float>(oscillatorWave));
+    setParameter(directProcessor, "osc1Level", 1.0f);
+    setParameter(directProcessor, "osc2Level", 0.0f);
+    setParameter(directProcessor, "osc1PulseWidth", 0.5f);
+    setParameter(directProcessor, "cutoff", baseCutoff);
+    setParameter(directProcessor, "lfoRate", rate);
+    setParameter(directProcessor, "lfoPitchDepth", pitchDepth);
+    setParameter(directProcessor, "lfoFilterDepth", filterDepth);
+    setParameter(directProcessor, "lfoAmpDepth", ampDepth);
+    setParameter(directProcessor, "lfoPanDepth", panDepth);
+    setParameter(directProcessor, "lfoPulseDepth", pulseDepth);
+    WebPlaySynthAudioProcessorTestAccess::startVoice(directProcessor, midiVelocity);
+    std::vector<float> directVoiceLeft;
+    directVoiceLeft.reserve(actual.left.size());
+    std::vector<float> directVoiceOscillator;
+    directVoiceOscillator.reserve(actual.left.size());
+    for (size_t sample = 0; sample < actual.left.size(); ++sample) {
+        float voiceLeft = 0.0f, voiceRight = 0.0f;
+        float oscillatorLeft = 0.0f, oscillatorRight = 0.0f;
+        WebPlaySynthAudioProcessorTestAccess::renderDirectVoiceSample(
+            directProcessor, voiceLeft, voiceRight, oscillatorLeft, oscillatorRight);
+        directVoiceLeft.push_back(voiceLeft);
+        directVoiceOscillator.push_back(oscillatorLeft);
+        if (static_cast<int>(sample) == 7948) {
+            std::cout << std::setprecision(12)
+                      << "LFO isolation at sample 7948: processorLeft="
+                      << actual.left[sample] << ", directVoiceLeft=" << voiceLeft
+                      << ", directOscillator=" << oscillatorLeft
+                      << ", midiVelocity=" << midiVelocity << '\n';
+        }
+    }
+    directProcessor.releaseResources();
+
+    constexpr double maxAbsoluteErrorThreshold = 4.0e-6;
+    ErrorStats leftErrors;
+    ErrorStats rightErrors;
+    double leftMaxSample = 0.0;
+    double rightMaxSample = 0.0;
+    int leftMaxSampleIndex = 0;
+    int rightMaxSampleIndex = 0;
+
+    double lfoPhase = 0.0;
+    double oscillatorPhase = 0.0;
+    for (int sample = 0; sample < blockCount * blockSize; ++sample) {
+        const auto lfo = webplaysynth::dsp::waveformSample(lfoPhase, 0);
+        const auto modulatedFrequency = juce::jlimit(
+            10.0, 20000.0, 440.0 + static_cast<double>(lfo * pitchDepth));
+        const auto oscillatorIncrement = modulatedFrequency / sampleRate;
+        const auto pulseWidth = juce::jlimit(0.05f, 0.95f, 0.5f + lfo * pulseDepth);
+        const auto oscillator = webplaysynth::dsp::oscillatorSample(
+            oscillatorPhase, oscillatorIncrement, oscillatorWave, pulseWidth);
+
+        float inputLeft = oscillator;
+        float inputRight = oscillator;
+        if (panDepth > 0.0f) {
+            const auto pan = juce::jlimit(-1.0f, 1.0f, static_cast<float>(lfo * panDepth));
+            const auto angle = (pan + 1.0f) * juce::MathConstants<float>::pi * 0.25f;
+            const auto panScale = juce::MathConstants<float>::sqrt2;
+            inputLeft *= std::cos(angle) * panScale;
+            inputRight *= std::sin(angle) * panScale;
+        }
+
+        const auto cutoff = juce::jlimit(30.0f, 19000.0f, baseCutoff + lfo * filterDepth);
+        leftFilter.setCutoffFrequency(cutoff);
+        rightFilter.setCutoffFrequency(cutoff);
+        const auto ampGain = (1.0f + lfo * ampDepth) / (1.0f + ampDepth);
+        const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * midiVelocity;
+        const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * midiVelocity;
+        if (scenario[0] == 'p' && (sample == 0 || sample == 1 || sample == 7948)) {
+            std::cout << std::setprecision(12)
+                      << "LFO path sample " << sample
+                      << ": directVoice=" << directVoiceLeft[static_cast<size_t>(sample)]
+                      << ", directOscillator=" << directVoiceOscillator[static_cast<size_t>(sample)]
+                      << ", reference=" << expectedLeft
+                      << ", processor=" << actual.left[static_cast<size_t>(sample)] << '\n';
+        }
+        const auto leftDelta = static_cast<double>(actual.left[static_cast<size_t>(sample)] - expectedLeft);
+        const auto rightDelta = static_cast<double>(actual.right[static_cast<size_t>(sample)] - expectedRight);
+
+        leftErrors.add(leftDelta);
+        rightErrors.add(rightDelta);
+        if (std::abs(leftDelta) > leftMaxSample) {
+            leftMaxSample = std::abs(leftDelta);
+            leftMaxSampleIndex = sample;
+        }
+        if (std::abs(rightDelta) > rightMaxSample) {
+            rightMaxSample = std::abs(rightDelta);
+            rightMaxSampleIndex = sample;
+        }
+
+        oscillatorPhase += oscillatorIncrement;
+        if (oscillatorPhase >= 1.0)
+            oscillatorPhase -= std::floor(oscillatorPhase);
+
+        lfoPhase += static_cast<double>(rate) / sampleRate;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= std::floor(lfoPhase);
+
+        if ((sample + 1) % blockSize == 0) {
+            const auto blockIndex = static_cast<size_t>((sample + 1) / blockSize - 1);
+            if (blockIndex == 0 || blockIndex == 1 || blockIndex == 10
+                || blockIndex == 31 || blockIndex == 63 || blockIndex == 127) {
+                std::cout << std::setprecision(12)
+                          << "LFO phase trace: " << scenario
+                          << ", block=" << blockIndex
+                          << ", expectedLfo=" << lfoPhase
+                          << ", actualLfo=" << actual.voiceLfoPhaseAtBlockEnd[blockIndex]
+                          << ", expectedOsc=" << oscillatorPhase
+                          << ", actualOsc=" << actual.voiceOscillatorPhaseAtBlockEnd[blockIndex]
+                          << ", actualFrequency=" << actual.voiceFrequencyAtBlockEnd[blockIndex]
+                          << '\n';
+            }
+        }
+    }
+
+    std::cout << std::setprecision(10)
+              << "LFO parity score: " << scenario
+              << ", samples=" << leftErrors.count
+              << ", left(mean=" << leftErrors.mean
+              << ", stddev=" << leftErrors.standardDeviation()
+              << ", rms=" << leftErrors.rms()
+              << ", max=" << leftErrors.maxAbsolute
+              << " at " << leftMaxSampleIndex << ")"
+              << ", right(mean=" << rightErrors.mean
+              << ", stddev=" << rightErrors.standardDeviation()
+              << ", rms=" << rightErrors.rms()
+              << ", max=" << rightErrors.maxAbsolute
+              << " at " << rightMaxSampleIndex << ")"
+              << ", maxThreshold=" << maxAbsoluteErrorThreshold << '\n';
+
+    require(leftErrors.maxAbsolute < maxAbsoluteErrorThreshold,
+        "LFO destination rendered left-channel maximum error must remain below threshold");
+    require(rightErrors.maxAbsolute < maxAbsoluteErrorThreshold,
+        "LFO destination rendered right-channel maximum error must remain below threshold");
+}
+
+void testLfoDestinationsMatchRenderedReference()
+{
+    assertLfoDestinationMatchesRenderedReference(0, 25.0f, 0.0f, 0.0f, 0.0f, 0.0f, 18000.0f, "pitch");
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 3000.0f, 0.0f, 0.0f, 0.0f, 1200.0f, "filter");
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.65f, 0.0f, 0.0f, 18000.0f, "amplitude");
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.0f, 0.85f, 0.0f, 18000.0f, "pan");
+    assertLfoDestinationMatchesRenderedReference(3, 0.0f, 0.0f, 0.0f, 0.0f, 0.4f, 18000.0f, "pulse-width");
+}
+
 void testLfoAmplitudeMatchesRenderedReference()
 {
     constexpr float rate = 4.5f;
@@ -345,6 +609,7 @@ int main()
     testAmpEnvelopeMatchesJuceAdsr();
     testFilterEnvelopeRenderedOutputMatchesJuceAdsr();
     testLfoAmplitudeMatchesRenderedReference();
+    testLfoDestinationsMatchRenderedReference();
     std::cout << "PASS: JUCE ADSR and LFO amplitude rendered-output parity\n";
     return 0;
 }
