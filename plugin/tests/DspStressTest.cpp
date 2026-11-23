@@ -72,6 +72,8 @@ void renderStressCase(double sampleRate)
     int peakBlock = -1;
     int peakFilterType = -1;
     float peakCutoff = 0.0f;
+    int currentFilterType = 2;
+    float currentCutoff = 6500.0f;
     constexpr int blocks = 320;
     for (int block = 0; block < blocks; ++block) {
         midi.clear();
@@ -84,8 +86,10 @@ void renderStressCase(double sampleRate)
                 midi.addEvent(juce::MidiMessage::noteOff(1, 36 + note * 3), 0);
         }
         if (block % 16 == 0) {
-            setParameter(processor, "cutoff", (block % 32 == 0) ? 80.0f : 18000.0f);
-            setParameter(processor, "filterType", static_cast<float>((block / 16) % 3));
+            currentCutoff = (block % 32 == 0) ? 80.0f : 18000.0f;
+            currentFilterType = (block / 16) % 3;
+            setParameter(processor, "cutoff", currentCutoff);
+            setParameter(processor, "filterType", static_cast<float>(currentFilterType));
             setParameter(processor, "lfoRate", (block % 32 == 0) ? 0.1f : 12.0f);
             setParameter(processor, "delayFeedback", (block % 32 == 0) ? 0.0f : 0.85f);
         }
@@ -99,10 +103,8 @@ void renderStressCase(double sampleRate)
                 if (magnitude > peak) {
                     peak = magnitude;
                     peakBlock = block;
-                    peakFilterType = (block % 16 == 0)
-                        ? static_cast<int>((block / 16) % 3)
-                        : peakFilterType;
-                    peakCutoff = (block % 32 == 0) ? 80.0f : 18000.0f;
+                    peakFilterType = currentFilterType;
+                    peakCutoff = currentCutoff;
                 }
                 energy += static_cast<double>(value) * value;
             }
