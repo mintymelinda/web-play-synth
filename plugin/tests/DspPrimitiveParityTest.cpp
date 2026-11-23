@@ -478,14 +478,14 @@ void assertLfoDestinationMatchesRenderedReference(
         rightFilter.setCutoffFrequency(cutoff);
         const auto ampGain = (1.0f + lfo * ampDepth) / (1.0f + ampDepth);
         const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * midiVelocity;
-        const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * velocity;
+        const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * midiVelocity;
         if (scenario[0] == 'p' && (sample == 0 || sample == 1 || sample == 7948)) {
             std::cout << std::setprecision(12)
                       << "LFO path sample " << sample
                       << ": directVoice=" << directVoiceLeft[static_cast<size_t>(sample)]
                       << ", directOscillator=" << directVoiceOscillator[static_cast<size_t>(sample)]
                       << ", reference=" << expectedLeft
-                      << ", processor=" << actual.left[static_cast<size_t>(sample)] << '\\n';
+                      << ", processor=" << actual.left[static_cast<size_t>(sample)] << '\n';
         }
         const auto leftDelta = static_cast<double>(actual.left[static_cast<size_t>(sample)] - expectedLeft);
         const auto rightDelta = static_cast<double>(actual.right[static_cast<size_t>(sample)] - expectedRight);
