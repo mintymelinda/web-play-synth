@@ -4,10 +4,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iomanip>
 #include <cstdlib>
-#include <iostream>
 #include <functional>
+#include <iomanip>
+#include <iostream>
 #include <vector>
 
 struct WebPlaySynthAudioProcessorTestAccess {
