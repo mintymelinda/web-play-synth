@@ -90,6 +90,8 @@ void WebPlaySynthAudioProcessor::Voice::start(
     currentCutoff=p.cutoff;
     currentResonance=p.resonance;
     appliedResonance=p.resonance;
+    for (auto& filter : filters)
+        filter.setResonance(p.resonance);
     ampEnvelope.setParameters({p.ampAttack,p.ampDecay,p.ampSustain,p.ampRelease});
     filterEnvelope.setParameters({p.filterAttack,p.filterDecay,p.filterSustain,p.filterRelease});
     ampEnvelope.noteOn();
