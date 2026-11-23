@@ -570,7 +570,8 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
     reverbParameters.roomSize=p.reverbRoom;
     reverbParameters.damping=p.reverbDamping;
     reverbParameters.wetLevel=p.reverbMix;
-    reverbParameters.dryLevel=1.0f-p.reverbMix;
+    // JUCE scales dryLevel by 2 internally, so 0.5 represents unity gain.
+    reverbParameters.dryLevel=0.5f*(1.0f-p.reverbMix);
     reverbParameters.width=1.0f;
     reverbParameters.freezeMode=0.0f;
     const auto& current=reverb.getParameters();
