@@ -84,7 +84,8 @@ private:
         void start(int midiNote, float noteVelocity, int channel, float pitchBend, float pressure, const Parameters& p, double previousFrequency);
         void release();
         void stop();
-        void render(const Parameters& p, double sampleRate, float& left, float& right);
+        void render(const Parameters& p, double sampleRate, float& left, float& right,
+            float* oscillatorLeft = nullptr, float* oscillatorRight = nullptr);
     };
     static ParameterState::ParameterLayout createParameterLayout();
     Parameters readParameters() const;
