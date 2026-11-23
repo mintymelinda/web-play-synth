@@ -448,7 +448,7 @@ void assertLfoDestinationMatchesRenderedReference(
               << ", rms=" << rightErrors.rms()
               << ", max=" << rightErrors.maxAbsolute
               << " at " << rightMaxSampleIndex << ")"
-              << ", maxThreshold=" << maxAbsoluteErrorThreshold << '\\n';
+              << ", maxThreshold=" << maxAbsoluteErrorThreshold << '\n';
 
     require(leftErrors.maxAbsolute < maxAbsoluteErrorThreshold,
         "LFO destination rendered left-channel maximum error must remain below threshold");
