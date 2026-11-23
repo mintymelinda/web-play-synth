@@ -8,6 +8,25 @@
 #include <functional>
 #include <vector>
 
+struct WebPlaySynthAudioProcessorTestAccess {
+    static void startVoice(WebPlaySynthAudioProcessor& processor)
+    {
+        processor.prepareToPlay(48000.0, 128);
+        const auto parameters = processor.readParameters();
+        processor.voices[0].start(69, 0.8f, 1, 0.0f, 0.0f, parameters, 0.0);
+    }
+
+    static void renderVoiceSample(WebPlaySynthAudioProcessor& processor, bool noteOff,
+        float& left, float& right, float& oscillatorLeft, float& oscillatorRight)
+    {
+        const auto parameters = processor.readParameters();
+        auto& voice = processor.voices[0];
+        if (noteOff)
+            voice.stop();
+        voice.render(parameters, 48000.0, left, right, &oscillatorLeft, &oscillatorRight);
+    }
+};
+
 namespace {
 constexpr double sampleRate = 48000.0;
 constexpr int blockSize = 128;
@@ -225,20 +244,19 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
     constexpr float release = 0.02f;
     constexpr float baseCutoff = 1200.0f;
     constexpr float contour = 0.45f;
-    constexpr float velocity = 0.8f;
     constexpr int noteOffSample = 240;
-    constexpr int blockCount = 6;
+    constexpr int sampleCount = 6 * blockSize;
 
-    const auto actual = render([](WebPlaySynthAudioProcessor& processor) {
-        configureCommon(processor);
-        setParameter(processor, "filterEnvEnabled", 1.0f);
-        setParameter(processor, "filterContour", contour);
-        setParameter(processor, "cutoff", baseCutoff);
-        setParameter(processor, "filterAttack", attack);
-        setParameter(processor, "filterDecay", decay);
-        setParameter(processor, "filterSustain", sustain);
-        setParameter(processor, "filterRelease", release);
-    }, blockCount, noteOffSample);
+    WebPlaySynthAudioProcessor processor;
+    configureCommon(processor);
+    setParameter(processor, "filterEnvEnabled", 1.0f);
+    setParameter(processor, "filterContour", contour);
+    setParameter(processor, "cutoff", baseCutoff);
+    setParameter(processor, "filterAttack", attack);
+    setParameter(processor, "filterDecay", decay);
+    setParameter(processor, "filterSustain", sustain);
+    setParameter(processor, "filterRelease", release);
+    WebPlaySynthAudioProcessorTestAccess::startVoice(processor);
 
     juce::ADSR referenceEnvelope;
     referenceEnvelope.setSampleRate(sampleRate);
@@ -259,11 +277,17 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
     leftFilter.setResonance(0.1f);
     rightFilter.setResonance(0.1f);
 
-    double oscillatorPhase = 0.0;
-    constexpr double oscillatorIncrement = 440.0 / sampleRate;
-    for (int sample = 0; sample < blockCount * blockSize; ++sample) {
-        if (sample == noteOffSample)
+    for (int sample = 0; sample < sampleCount; ++sample) {
+        const auto noteOff = sample == noteOffSample;
+        if (noteOff)
             referenceEnvelope.noteOff();
+
+        float actualLeft = 0.0f;
+        float actualRight = 0.0f;
+        float oscillatorLeft = 0.0f;
+        float oscillatorRight = 0.0f;
+        WebPlaySynthAudioProcessorTestAccess::renderVoiceSample(processor, noteOff,
+            actualLeft, actualRight, oscillatorLeft, oscillatorRight);
 
         const auto envelope = referenceEnvelope.getNextSample();
         const auto cutoff = juce::jlimit(30.0f, 19000.0f,
@@ -271,29 +295,14 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
         leftFilter.setCutoffFrequency(cutoff);
         rightFilter.setCutoffFrequency(cutoff);
 
-        const auto oscillator = webplaysynth::dsp::oscillatorSample(
-            oscillatorPhase, oscillatorIncrement, 0);
-        oscillatorPhase += oscillatorIncrement;
-        if (oscillatorPhase >= 1.0)
-            oscillatorPhase -= std::floor(oscillatorPhase);
-
-        const auto expectedLeft = leftFilter.processSample(0, oscillator) * velocity;
-        const auto expectedRight = rightFilter.processSample(0, oscillator) * velocity;
-        const auto leftError = std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft);
-        const auto rightError = std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight);
-        if (leftError >= 3.0e-6f || rightError >= 3.0e-6f) {
-            std::cerr << "filter parity sample=" << sample
-                      << " envelope=" << envelope << " cutoff=" << cutoff
-                      << " actual=(" << actual.left[static_cast<size_t>(sample)] << ", "
-                      << actual.right[static_cast<size_t>(sample)] << ") expected=("
-                      << expectedLeft << ", " << expectedRight << ") errors=("
-                      << leftError << ", " << rightError << ")\\n";
-        }
-        require(leftError < 3.0e-6f,
-            "filter-envelope rendered left channel must match JUCE ADSR and TPT filter");
-        require(rightError < 3.0e-6f,
-            "filter-envelope rendered right channel must match JUCE ADSR and TPT filter");
+        const auto expectedLeft = leftFilter.processSample(0, oscillatorLeft) * 0.8f;
+        const auto expectedRight = rightFilter.processSample(0, oscillatorRight) * 0.8f;
+        require(std::abs(actualLeft - expectedLeft) < 3.0e-6f,
+            "filter-envelope rendered left channel must match JUCE ADSR and TPT filter using the actual oscillator signal");
+        require(std::abs(actualRight - expectedRight) < 3.0e-6f,
+            "filter-envelope rendered right channel must match JUCE ADSR and TPT filter using the actual oscillator signal");
     }
+    processor.releaseResources();
 }
 
 void testLfoAmplitudeMatchesRenderedReference()
