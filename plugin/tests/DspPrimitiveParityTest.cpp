@@ -26,11 +26,18 @@ struct WebPlaySynthAudioProcessorTestAccess {
         return processor.voices[0].currentFrequency;
     }
 
-    static void startVoice(WebPlaySynthAudioProcessor& processor)
+    static void startVoice(WebPlaySynthAudioProcessor& processor, float velocity)
     {
-        processor.prepareToPlay(48000.0, 128);
         const auto parameters = processor.readParameters();
-        processor.voices[0].start(69, 0.8f, 1, 0.0f, 0.0f, parameters, 0.0);
+        processor.voices[0].start(69, velocity, 1, 0.0f, 0.0f, parameters, 0.0);
+    }
+
+    static void renderDirectVoiceSample(WebPlaySynthAudioProcessor& processor,
+        float& left, float& right, float& oscillatorLeft, float& oscillatorRight)
+    {
+        const auto parameters = processor.readParameters();
+        processor.voices[0].render(parameters, 48000.0, left, right,
+            &oscillatorLeft, &oscillatorRight);
     }
 
     static void renderVoiceSample(WebPlaySynthAudioProcessor& processor, bool noteOff,
@@ -398,6 +405,45 @@ void assertLfoDestinationMatchesRenderedReference(
     leftFilter.setResonance(0.1f);
     rightFilter.setResonance(0.1f);
 
+    // Render the same configured voice directly, bypassing MIDI dispatch and
+    // processBlock aggregation. This isolates voice DSP from processor routing.
+    WebPlaySynthAudioProcessor directProcessor;
+    directProcessor.prepareToPlay(sampleRate, blockSize);
+    configureCommon(directProcessor);
+    setParameter(directProcessor, "osc1Wave", static_cast<float>(oscillatorWave));
+    setParameter(directProcessor, "osc1Level", 1.0f);
+    setParameter(directProcessor, "osc2Level", 0.0f);
+    setParameter(directProcessor, "osc1PulseWidth", 0.5f);
+    setParameter(directProcessor, "cutoff", baseCutoff);
+    setParameter(directProcessor, "lfoRate", rate);
+    setParameter(directProcessor, "lfoPitchDepth", pitchDepth);
+    setParameter(directProcessor, "lfoFilterDepth", filterDepth);
+    setParameter(directProcessor, "lfoAmpDepth", ampDepth);
+    setParameter(directProcessor, "lfoPanDepth", panDepth);
+    setParameter(directProcessor, "lfoPulseDepth", pulseDepth);
+    constexpr float midiVelocity = 102.0f / 127.0f;
+    WebPlaySynthAudioProcessorTestAccess::startVoice(directProcessor, midiVelocity);
+    std::vector<float> directVoiceLeft;
+    directVoiceLeft.reserve(actual.left.size());
+    std::vector<float> directVoiceOscillator;
+    directVoiceOscillator.reserve(actual.left.size());
+    for (size_t sample = 0; sample < actual.left.size(); ++sample) {
+        float voiceLeft = 0.0f, voiceRight = 0.0f;
+        float oscillatorLeft = 0.0f, oscillatorRight = 0.0f;
+        WebPlaySynthAudioProcessorTestAccess::renderDirectVoiceSample(
+            directProcessor, voiceLeft, voiceRight, oscillatorLeft, oscillatorRight);
+        directVoiceLeft.push_back(voiceLeft);
+        directVoiceOscillator.push_back(oscillatorLeft);
+        if (static_cast<int>(sample) == 7948) {
+            std::cout << std::setprecision(12)
+                      << "LFO isolation at sample 7948: processorLeft="
+                      << actual.left[sample] << ", directVoiceLeft=" << voiceLeft
+                      << ", directOscillator=" << oscillatorLeft
+                      << ", midiVelocity=" << midiVelocity << '\\n';
+        }
+    }
+    directProcessor.releaseResources();
+
     constexpr double maxAbsoluteErrorThreshold = 4.0e-6;
     ErrorStats leftErrors;
     ErrorStats rightErrors;
@@ -433,6 +479,14 @@ void assertLfoDestinationMatchesRenderedReference(
         const auto ampGain = (1.0f + lfo * ampDepth) / (1.0f + ampDepth);
         const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * velocity;
         const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * velocity;
+        if (scenario[0] == 'p' && (sample == 0 || sample == 1 || sample == 7948)) {
+            std::cout << std::setprecision(12)
+                      << "LFO path sample " << sample
+                      << ": directVoice=" << directVoiceLeft[static_cast<size_t>(sample)]
+                      << ", directOscillator=" << directVoiceOscillator[static_cast<size_t>(sample)]
+                      << ", reference=" << expectedLeft
+                      << ", processor=" << actual.left[static_cast<size_t>(sample)] << '\\n';
+        }
         const auto leftDelta = static_cast<double>(actual.left[static_cast<size_t>(sample)] - expectedLeft);
         const auto rightDelta = static_cast<double>(actual.right[static_cast<size_t>(sample)] - expectedRight);
 
