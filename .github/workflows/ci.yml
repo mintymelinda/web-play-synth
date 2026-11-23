@@ -55,7 +55,17 @@ jobs:
             libxinerama-dev \
             libxrandr-dev \
             libxcursor-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            ccache \
+            ninja-build
+
+      - name: Cache C++ compiler outputs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: linux-gcc-ccache-${{ hashFiles('plugin/CMakeLists.txt') }}
+          restore-keys: |
+            linux-gcc-ccache-
 
       - uses: actions/setup-python@v5
         with:
@@ -65,10 +75,17 @@ jobs:
         run: |
           cmake -S plugin -B build/plugin \
             -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=ON
+            -DBUILD_TESTING=ON \
+            -G Ninja \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build VST3, Standalone, and smoke test
-        run: cmake --build build/plugin --config Release --parallel 2
+        run: cmake --build build/plugin --config Release --parallel
+
+      - name: Show compiler cache statistics
+        if: always()
+        run: ccache --show-stats
 
       - name: Run native audio and MIDI smoke tests
         run: ctest --test-dir build/plugin -C Release --output-on-failure
