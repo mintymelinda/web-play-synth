@@ -77,7 +77,7 @@ private:
         std::array<double, 4> phase1 {}, phase2 {};
         double lfoPhase=0, currentFrequency=440, targetFrequency=440;
         int currentFilterType=-1;
-        float currentResonance=-1.0f;
+        float currentCutoff=1800.0f, currentResonance=0.8f;
         void prepare(double sampleRate, int maximumBlockSize);
         void start(int midiNote, float noteVelocity, int channel, float pitchBend, float pressure, const Parameters& p, double previousFrequency);
         void release();
