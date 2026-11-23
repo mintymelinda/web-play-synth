@@ -160,11 +160,39 @@ int main()
         std::cerr << "sustain release tail peak " << releaseTailPeak
                   << ", active voices " << WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor)
                   << ", amp ADSR active " << WebPlaySynthAudioProcessorTestAccess::firstVoiceAmpEnvelopeActive(processor)
-                  << '\\n';
+                  << '\n';
     require(releaseTailPeak < 0.001f,
         "released sustain note must decay to silence after its amp release time");
     require(WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor) == 0,
         "released sustain-held voice must be retired after its amp release");
+
+    // MIDI learn must not consume a channel-performance controller. CC64 must
+    // still engage sustain before the same event is used for the learned mapping.
+    {
+        WebPlaySynthAudioProcessor learnProcessor;
+        configure(learnProcessor, true);
+        juce::MidiBuffer learnMidi;
+        learnMidi.addEvent(juce::MidiMessage::noteOn(1, 60, 0.8f), 0);
+        renderPeak(learnProcessor, learnMidi);
+
+        learnProcessor.setMidiCcLearnTarget("master");
+        learnMidi.clear();
+        learnMidi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+        renderPeak(learnProcessor, learnMidi);
+        require(WebPlaySynthAudioProcessorTestAccess::sustainPedalDown(learnProcessor, 1),
+            "CC64 must engage sustain even when MIDI CC learn is armed");
+
+        learnMidi.clear();
+        learnMidi.addEvent(juce::MidiMessage::noteOff(1, 60), 0);
+        renderPeak(learnProcessor, learnMidi);
+        float learnedHeldPeak = 0.0f;
+        for (int block = 0; block < 8; ++block)
+            learnedHeldPeak = juce::jmax(learnedHeldPeak, renderPeak(learnProcessor, learnMidi));
+        require(learnedHeldPeak > 0.05f,
+            "MIDI CC learn must not prevent CC64 from holding a released note");
+
+        learnProcessor.releaseResources();
+    }
 
     processor.releaseResources();
     std::cout << "PASS: MIDI pitch bend and sustain pedal audio paths\n";
