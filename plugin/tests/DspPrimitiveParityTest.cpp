@@ -26,32 +26,7 @@ struct WebPlaySynthAudioProcessorTestAccess {
         voice.render(parameters, 48000.0, left, right, &oscillatorLeft, &oscillatorRight);
     }
 
-    static void printVoiceState(const WebPlaySynthAudioProcessor& processor)
-    {
-        const auto& voice = processor.voices[0];
-        std::cerr << "voice-state: currentCutoff=" << voice.currentCutoff
-                  << ", currentResonance=" << voice.currentResonance
-                  << ", appliedResonance=" << voice.appliedResonance
-                  << ", currentFrequency=" << voice.currentFrequency
-                  << ", lfoPhase=" << voice.lfoPhase
-                  << ", oscillatorPhase=" << voice.phase1[0] << '\n';
-    }
 
-    static void printProcessState(const WebPlaySynthAudioProcessor& processor)
-    {
-        const auto parameters = processor.readParameters();
-        std::cerr << "process-state: master=" << parameters.master
-                  << ", chorusMix=" << parameters.chorusMix
-                  << ", delayMix=" << parameters.delayMix
-                  << ", reverbMix=" << parameters.reverbMix << '\n';
-        for (size_t index = 0; index < processor.voices.size(); ++index) {
-            const auto& voice = processor.voices[index];
-            if (voice.active)
-                std::cerr << "active-voice[" << index << "]: velocity=" << voice.velocity
-                          << ", note=" << voice.note << ", frequency=" << voice.currentFrequency
-                          << ", phase=" << voice.phase1[0] << '\n';
-        }
-    }
 };
 
 namespace {
@@ -102,11 +77,6 @@ StereoRender render(Configure configure, int blockCount, int noteOffSample = -1)
             midi.addEvent(juce::MidiMessage::noteOff(1, 69), noteOffSample - blockStart);
 
         processor.processBlock(output, midi);
-        if (block == 0 && processor.readParameters().lfoPitchDepth > 0.0f) {
-            WebPlaySynthAudioProcessorTestAccess::printProcessState(processor);
-            std::cerr << "process-output: sample0=" << output.getSample(0, 0)
-                      << ", sample1=" << output.getSample(0, 1) << '\n';
-        }
         for (int sample = 0; sample < blockSize; ++sample) {
             const auto left = output.getSample(0, sample);
             const auto right = output.getSample(1, sample);
@@ -422,29 +392,6 @@ void assertLfoDestinationMatchesRenderedReference(
                       << ", oscillator=" << oscillator
                       << ", cutoff=" << cutoff
                       << ", ampGain=" << ampGain << '\n';
-            WebPlaySynthAudioProcessor diagnosticProcessor;
-            diagnosticProcessor.prepareToPlay(sampleRate, blockSize);
-            configureCommon(diagnosticProcessor);
-            setParameter(diagnosticProcessor, "osc1Wave", static_cast<float>(oscillatorWave));
-            setParameter(diagnosticProcessor, "osc1Level", 1.0f);
-            setParameter(diagnosticProcessor, "osc1PulseWidth", 0.5f);
-            setParameter(diagnosticProcessor, "cutoff", baseCutoff);
-            setParameter(diagnosticProcessor, "lfoRate", rate);
-            setParameter(diagnosticProcessor, "lfoPitchDepth", pitchDepth);
-            setParameter(diagnosticProcessor, "lfoFilterDepth", filterDepth);
-            setParameter(diagnosticProcessor, "lfoAmpDepth", ampDepth);
-            setParameter(diagnosticProcessor, "lfoPanDepth", panDepth);
-            setParameter(diagnosticProcessor, "lfoPulseDepth", pulseDepth);
-            WebPlaySynthAudioProcessorTestAccess::startVoice(diagnosticProcessor);
-            float directLeft = 0.0f, directRight = 0.0f;
-            float directOscillatorLeft = 0.0f, directOscillatorRight = 0.0f;
-            for (int directSample = 0; directSample <= sample; ++directSample)
-                WebPlaySynthAudioProcessorTestAccess::renderVoiceSample(diagnosticProcessor, false,
-                    directLeft, directRight, directOscillatorLeft, directOscillatorRight);
-            std::cerr << "direct-voice: left=" << directLeft << ", right=" << directRight
-                      << ", oscillatorLeft=" << directOscillatorLeft
-                      << ", oscillatorRight=" << directOscillatorRight << '\n';
-            WebPlaySynthAudioProcessorTestAccess::printVoiceState(diagnosticProcessor);
         }
         require(leftError < 4.0e-6f,
             "LFO destination rendered left channel must match the explicit reference path");
