@@ -51,6 +51,9 @@ void setParameter(WebPlaySynthAudioProcessor& processor, const char* id, float v
 struct StereoRender {
     std::vector<float> left;
     std::vector<float> right;
+    std::vector<double> voiceLfoPhaseAtBlockEnd;
+    std::vector<double> voiceOscillatorPhaseAtBlockEnd;
+    std::vector<double> voiceFrequencyAtBlockEnd;
 };
 
 template <typename Configure>
@@ -77,6 +80,9 @@ StereoRender render(Configure configure, int blockCount, int noteOffSample = -1)
             midi.addEvent(juce::MidiMessage::noteOff(1, 69), noteOffSample - blockStart);
 
         processor.processBlock(output, midi);
+        result.voiceLfoPhaseAtBlockEnd.push_back(processor.voices[0].lfoPhase);
+        result.voiceOscillatorPhaseAtBlockEnd.push_back(processor.voices[0].phase1[0]);
+        result.voiceFrequencyAtBlockEnd.push_back(processor.voices[0].currentFrequency);
         for (int sample = 0; sample < blockSize; ++sample) {
             const auto left = output.getSample(0, sample);
             const auto right = output.getSample(1, sample);
@@ -433,6 +439,22 @@ void assertLfoDestinationMatchesRenderedReference(
         lfoPhase += static_cast<double>(rate) / sampleRate;
         if (lfoPhase >= 1.0)
             lfoPhase -= std::floor(lfoPhase);
+
+        if ((sample + 1) % blockSize == 0) {
+            const auto blockIndex = static_cast<size_t>((sample + 1) / blockSize - 1);
+            if (blockIndex == 0 || blockIndex == 1 || blockIndex == 10
+                || blockIndex == 31 || blockIndex == 63 || blockIndex == 127) {
+                std::cout << std::setprecision(12)
+                          << "LFO phase trace: " << scenario
+                          << ", block=" << blockIndex
+                          << ", expectedLfo=" << lfoPhase
+                          << ", actualLfo=" << actual.voiceLfoPhaseAtBlockEnd[blockIndex]
+                          << ", expectedOsc=" << oscillatorPhase
+                          << ", actualOsc=" << actual.voiceOscillatorPhaseAtBlockEnd[blockIndex]
+                          << ", actualFrequency=" << actual.voiceFrequencyAtBlockEnd[blockIndex]
+                          << '\\n';
+            }
+        }
     }
 
     std::cout << std::setprecision(10)
