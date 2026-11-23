@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "Dsp/Oscillator.h"
+#include "Dsp/Lfo.h"
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
@@ -83,7 +84,7 @@ void WebPlaySynthAudioProcessor::Voice::start(
     active=true;
     phase1.fill(0.0);
     phase2.fill(0.0);
-    lfoPhase=0;
+    lfoOscillator.reset();
     for (auto& filter : filters) filter.reset();
     targetFrequency=juce::MidiMessage::getMidiNoteInHertz(n)
         * std::pow(2.0, static_cast<double>(pitchBendSemitones) / 12.0);
@@ -138,9 +139,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
 
     const auto base1=currentFrequency*p.osc1FrequencyRatio;
     const auto base2=currentFrequency*p.osc2FrequencyRatio;
-    const auto lfo=webplaysynth::dsp::waveformSample(lfoPhase,p.lfoWave);
-    lfoPhase+=p.lfoRate/sr;
-    if(lfoPhase>=1) lfoPhase-=std::floor(lfoPhase);
+    const auto lfo = lfoOscillator.nextSample(p.lfoRate, sr, p.lfoWave);
 
     const int unisonCount = 1 << juce::jlimit(0, 2, p.unisonVoices);
     float mixLeft=0.0f, mixRight=0.0f;
