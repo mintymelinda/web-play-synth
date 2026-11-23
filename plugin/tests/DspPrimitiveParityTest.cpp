@@ -2,7 +2,9 @@
 #include "Dsp/Oscillator.h"
 #include "Dsp/Envelope.h"
 
+#include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <cstdlib>
 #include <iostream>
 #include <functional>
@@ -433,7 +435,8 @@ void assertLfoDestinationMatchesRenderedReference(
             lfoPhase -= std::floor(lfoPhase);
     }
 
-    std::cout << "LFO parity score: " << scenario
+    std::cout << std::setprecision(10)
+              << "LFO parity score: " << scenario
               << ", samples=" << leftErrors.count
               << ", left(mean=" << leftErrors.mean
               << ", stddev=" << leftErrors.standardDeviation()
