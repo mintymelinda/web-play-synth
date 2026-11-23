@@ -25,8 +25,6 @@ struct WebPlaySynthAudioProcessorTestAccess {
             voice.stop();
         voice.render(parameters, 48000.0, left, right, &oscillatorLeft, &oscillatorRight);
     }
-
-
 };
 
 namespace {
