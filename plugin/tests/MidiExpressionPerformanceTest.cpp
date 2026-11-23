@@ -35,7 +35,7 @@ namespace {
 void require(bool condition, const char* message)
 {
     if (!condition) {
-        std::cerr << "FAIL: " << message << '\\n';
+        std::cerr << "FAIL: " << message << '\n';
         std::exit(1);
     }
 }
@@ -160,7 +160,7 @@ int main()
         std::cerr << "sustain release tail peak " << releaseTailPeak
                   << ", active voices " << WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor)
                   << ", amp ADSR active " << WebPlaySynthAudioProcessorTestAccess::firstVoiceAmpEnvelopeActive(processor)
-                  << '\\n';
+                  << '\n';
     require(releaseTailPeak < 0.001f,
         "released sustain note must decay to silence after its amp release time");
     require(WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor) == 0,
@@ -195,6 +195,6 @@ int main()
     }
 
     processor.releaseResources();
-    std::cout << "PASS: MIDI pitch bend and sustain pedal audio paths\\n";
+    std::cout << "PASS: MIDI pitch bend and sustain pedal audio paths\n";
     return 0;
 }
