@@ -11,6 +11,21 @@
 #include <vector>
 
 struct WebPlaySynthAudioProcessorTestAccess {
+    static double voiceLfoPhase(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].lfoPhase;
+    }
+
+    static double voiceOscillatorPhase(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].phase1[0];
+    }
+
+    static double voiceFrequency(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].currentFrequency;
+    }
+
     static void startVoice(WebPlaySynthAudioProcessor& processor)
     {
         processor.prepareToPlay(48000.0, 128);
@@ -80,9 +95,9 @@ StereoRender render(Configure configure, int blockCount, int noteOffSample = -1)
             midi.addEvent(juce::MidiMessage::noteOff(1, 69), noteOffSample - blockStart);
 
         processor.processBlock(output, midi);
-        result.voiceLfoPhaseAtBlockEnd.push_back(processor.voices[0].lfoPhase);
-        result.voiceOscillatorPhaseAtBlockEnd.push_back(processor.voices[0].phase1[0]);
-        result.voiceFrequencyAtBlockEnd.push_back(processor.voices[0].currentFrequency);
+        result.voiceLfoPhaseAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceLfoPhase(processor));
+        result.voiceOscillatorPhaseAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceOscillatorPhase(processor));
+        result.voiceFrequencyAtBlockEnd.push_back(WebPlaySynthAudioProcessorTestAccess::voiceFrequency(processor));
         for (int sample = 0; sample < blockSize; ++sample) {
             const auto left = output.getSample(0, sample);
             const auto right = output.getSample(1, sample);
