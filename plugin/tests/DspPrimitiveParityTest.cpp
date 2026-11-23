@@ -90,7 +90,7 @@ void configureCommon(WebPlaySynthAudioProcessor& processor)
 
 void testAmpEnvelopeMatchesJuceAdsr()
 {
-    constexpr float attack = 0.004f;
+    constexpr float attack = 0.007f;
     constexpr float decay = 0.012f;
     constexpr float sustain = 0.35f;
     constexpr float release = 0.02f;
