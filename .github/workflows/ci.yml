@@ -43,15 +43,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: linux-x86_64
-            os: ubuntu-latest
-            artifact: web-play-synth-linux-x86_64
+          # - platform: linux-x86_64
+            # os: ubuntu-latest
+            # artifact: web-play-synth-linux-x86_64
           - platform: windows-x86_64
             os: windows-latest
             artifact: web-play-synth-windows-x86_64
-          - platform: macos-universal
-            os: macos-15
-            artifact: web-play-synth-macos-universal
+          # - platform: macos-universal
+            # os: macos-15
+            # artifact: web-play-synth-macos-universal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
