@@ -305,6 +305,99 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
     processor.releaseResources();
 }
 
+void assertLfoDestinationMatchesRenderedReference(
+    int oscillatorWave,
+    float pitchDepth,
+    float filterDepth,
+    float ampDepth,
+    float panDepth,
+    float pulseDepth,
+    float baseCutoff)
+{
+    constexpr float rate = 4.5f;
+    constexpr float velocity = 0.8f;
+    constexpr int blockCount = 128;
+
+    const auto actual = render([=](WebPlaySynthAudioProcessor& processor) {
+        configureCommon(processor);
+        setParameter(processor, "osc1Wave", static_cast<float>(oscillatorWave));
+        setParameter(processor, "osc1Level", 1.0f);
+        setParameter(processor, "osc1PulseWidth", 0.5f);
+        setParameter(processor, "cutoff", baseCutoff);
+        setParameter(processor, "lfoRate", rate);
+        setParameter(processor, "lfoPitchDepth", pitchDepth);
+        setParameter(processor, "lfoFilterDepth", filterDepth);
+        setParameter(processor, "lfoAmpDepth", ampDepth);
+        setParameter(processor, "lfoPanDepth", panDepth);
+        setParameter(processor, "lfoPulseDepth", pulseDepth);
+    }, blockCount);
+
+    juce::dsp::StateVariableTPTFilter<float> leftFilter;
+    juce::dsp::StateVariableTPTFilter<float> rightFilter;
+    const juce::dsp::ProcessSpec spec {
+        sampleRate, static_cast<juce::uint32>(blockSize), 1
+    };
+    leftFilter.prepare(spec);
+    rightFilter.prepare(spec);
+    leftFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    rightFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    leftFilter.reset();
+    rightFilter.reset();
+    leftFilter.setResonance(0.1f);
+    rightFilter.setResonance(0.1f);
+
+    double lfoPhase = 0.0;
+    double oscillatorPhase = 0.0;
+    for (int sample = 0; sample < blockCount * blockSize; ++sample) {
+        const auto lfo = webplaysynth::dsp::waveformSample(lfoPhase, 0);
+        const auto modulatedFrequency = juce::jlimit(
+            10.0, 20000.0, 440.0 + static_cast<double>(lfo * pitchDepth));
+        const auto oscillatorIncrement = modulatedFrequency / sampleRate;
+        const auto pulseWidth = juce::jlimit(0.05f, 0.95f, 0.5f + lfo * pulseDepth);
+        const auto oscillator = webplaysynth::dsp::oscillatorSample(
+            oscillatorPhase, oscillatorIncrement, oscillatorWave, pulseWidth);
+
+        float inputLeft = oscillator;
+        float inputRight = oscillator;
+        if (panDepth > 0.0f) {
+            const auto pan = juce::jlimit(-1.0f, 1.0f, static_cast<float>(lfo * panDepth));
+            const auto angle = (pan + 1.0f) * juce::MathConstants<float>::pi * 0.25f;
+            const auto panScale = juce::MathConstants<float>::sqrt2;
+            inputLeft *= std::cos(angle) * panScale;
+            inputRight *= std::sin(angle) * panScale;
+        }
+
+        const auto cutoff = juce::jlimit(30.0f, 19000.0f, baseCutoff + lfo * filterDepth);
+        leftFilter.setCutoffFrequency(cutoff);
+        rightFilter.setCutoffFrequency(cutoff);
+        const auto ampGain = (1.0f + lfo * ampDepth) / (1.0f + ampDepth);
+        const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * velocity;
+        const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * velocity;
+
+        require(std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft) < 4.0e-6f,
+            "LFO destination rendered left channel must match the explicit reference path");
+        require(std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight) < 4.0e-6f,
+            "LFO destination rendered right channel must match the explicit reference path");
+
+        oscillatorPhase += oscillatorIncrement;
+        if (oscillatorPhase >= 1.0)
+            oscillatorPhase -= std::floor(oscillatorPhase);
+
+        lfoPhase += static_cast<double>(rate) / sampleRate;
+        if (lfoPhase >= 1.0)
+            lfoPhase -= std::floor(lfoPhase);
+    }
+}
+
+void testLfoDestinationsMatchRenderedReference()
+{
+    assertLfoDestinationMatchesRenderedReference(0, 25.0f, 0.0f, 0.0f, 0.0f, 0.0f, 18000.0f);
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 3000.0f, 0.0f, 0.0f, 0.0f, 1200.0f);
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.65f, 0.0f, 0.0f, 18000.0f);
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.0f, 0.85f, 0.0f, 18000.0f);
+    assertLfoDestinationMatchesRenderedReference(3, 0.0f, 0.0f, 0.0f, 0.0f, 0.4f, 18000.0f);
+}
+
 void testLfoAmplitudeMatchesRenderedReference()
 {
     constexpr float rate = 4.5f;
@@ -345,6 +438,7 @@ int main()
     testAmpEnvelopeMatchesJuceAdsr();
     testFilterEnvelopeRenderedOutputMatchesJuceAdsr();
     testLfoAmplitudeMatchesRenderedReference();
+    testLfoDestinationsMatchRenderedReference();
     std::cout << "PASS: JUCE ADSR and LFO amplitude rendered-output parity\n";
     return 0;
 }
