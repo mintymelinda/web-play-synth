@@ -66,6 +66,7 @@ void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
         filter.reset();
     }
     currentFilterType=0;
+    filterSmoothingCoefficient = static_cast<float>(1.0 - std::exp(-1.0 / (0.015 * sr)));
     ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
 }
 void WebPlaySynthAudioProcessor::Voice::start(
@@ -88,6 +89,7 @@ void WebPlaySynthAudioProcessor::Voice::start(
     currentFrequency=p.glideEnabled && previous>0 ? previous : targetFrequency;
     currentCutoff=p.cutoff;
     currentResonance=p.resonance;
+    appliedResonance=p.resonance;
     ampEnvelope.setParameters({p.ampAttack,p.ampDecay,p.ampSustain,p.ampRelease});
     filterEnvelope.setParameters({p.filterAttack,p.filterDecay,p.filterSustain,p.filterRelease});
     ampEnvelope.noteOn();
@@ -198,14 +200,16 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     const auto env=p.filterEnvEnabled?filterEnvelopeValue:0.0f;
     // Match Web Audio AudioParam.setTargetAtTime(..., 0.015): native
     // filter controls must not jump discontinuously between audio blocks.
-    const auto filterSmoothing = static_cast<float>(1.0 - std::exp(-1.0 / (0.015 * sr)));
-    currentCutoff += (p.cutoff - currentCutoff) * filterSmoothing;
-    currentResonance += (p.resonance - currentResonance) * filterSmoothing;
+    currentCutoff += (p.cutoff - currentCutoff) * filterSmoothingCoefficient;
+    currentResonance += (p.resonance - currentResonance) * filterSmoothingCoefficient;
     const auto cutoff=juce::jlimit(30.0f,19000.0f,currentCutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
     const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * p.filterDriveGain) : mixLeft;
     const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * p.filterDriveGain) : mixRight;
-    for (auto& filter : filters)
-        filter.setResonance(currentResonance);
+    if (std::abs(currentResonance - appliedResonance) >= 0.01f) {
+        for (auto& filter : filters)
+            filter.setResonance(currentResonance);
+        appliedResonance = currentResonance;
+    }
     for (auto& filter : filters)
         filter.setCutoffFrequency(cutoff);
     const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
