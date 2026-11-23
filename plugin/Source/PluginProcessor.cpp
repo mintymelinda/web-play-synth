@@ -602,17 +602,6 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
         const auto cc = m.getControllerNumber();
         const auto channel = juce::jlimit(1, 16, m.getChannel());
         const auto channelIndex = static_cast<size_t>(channel - 1);
-        const auto learnTarget = midiCcLearnTarget.exchange(-1);
-        if (learnTarget >= 0 && learnTarget < midiCcParameterIds().size()) {
-            for (auto& assignment : midiCcToParameter)
-                if (assignment.load() == learnTarget)
-                    assignment.store(-1);
-            midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
-            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
-                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
-            return;
-        }
-
         // Channel-mode messages are handled as performance semantics,
         // before the generic user CC mapping layer.
         if (cc == 120) {
@@ -668,6 +657,17 @@ void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,co
                         voice.release();
                 }
             }
+        }
+
+        const auto learnTarget = midiCcLearnTarget.exchange(-1);
+        if (learnTarget >= 0 && learnTarget < midiCcParameterIds().size()) {
+            for (auto& assignment : midiCcToParameter)
+                if (assignment.load() == learnTarget)
+                    assignment.store(-1);
+            midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
+            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
+                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
+            return;
         }
 
         const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
