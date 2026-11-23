@@ -102,6 +102,11 @@ StereoRender render(Configure configure, int blockCount, int noteOffSample = -1)
             midi.addEvent(juce::MidiMessage::noteOff(1, 69), noteOffSample - blockStart);
 
         processor.processBlock(output, midi);
+        if (block == 0 && processor.readParameters().lfoPitchDepth > 0.0f) {
+            WebPlaySynthAudioProcessorTestAccess::printProcessState(processor);
+            std::cerr << "process-output: sample0=" << output.getSample(0, 0)
+                      << ", sample1=" << output.getSample(0, 1) << '\n';
+        }
         for (int sample = 0; sample < blockSize; ++sample) {
             const auto left = output.getSample(0, sample);
             const auto right = output.getSample(1, sample);
