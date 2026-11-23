@@ -26,6 +26,11 @@ target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(WebPlaySynthOscillatorPrimitivesTest tests/OscillatorPrimitivesTest.cpp)
+    target_include_directories(WebPlaySynthOscillatorPrimitivesTest PRIVATE Source)
+    target_compile_features(WebPlaySynthOscillatorPrimitivesTest PRIVATE cxx_std_17)
+    add_test(NAME native-portable-oscillator-primitives COMMAND WebPlaySynthOscillatorPrimitivesTest)
+
     add_executable(WebPlaySynthSmokeTest tests/PluginSmokeTest.cpp)
     target_include_directories(WebPlaySynthSmokeTest PRIVATE
         Source

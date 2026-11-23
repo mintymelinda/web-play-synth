@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Dsp/Oscillator.h"
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
@@ -136,7 +137,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
 
     const auto base1=currentFrequency*p.osc1FrequencyRatio;
     const auto base2=currentFrequency*p.osc2FrequencyRatio;
-    const auto lfo=waveformSample(lfoPhase,p.lfoWave);
+    const auto lfo=webplaysynth::dsp::waveformSample(lfoPhase,p.lfoWave);
     lfoPhase+=p.lfoRate/sr;
     if(lfoPhase>=1) lfoPhase-=std::floor(lfoPhase);
 
@@ -157,19 +158,19 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
             const auto syncPhase=phase2[static_cast<size_t>(layer)]*syncRatio;
             const auto wrappedSyncPhase=syncPhase-std::floor(syncPhase);
             const auto syncIncrement=juce::jlimit(0.0001,0.49,syncRatio*syncMasterFrequency/sr);
-            s2=oscillatorSample(wrappedSyncPhase,syncIncrement,2);
+            s2=webplaysynth::dsp::oscillatorSample(wrappedSyncPhase,syncIncrement,2);
             const auto masterResetFraction=syncRatio-std::floor(syncRatio);
             const auto masterIncrement=juce::jlimit(0.0001,0.49,syncMasterFrequency/sr);
             s2-=static_cast<float>(masterResetFraction)
-                * WebPlaySynthAudioProcessor::polyBlep(phase2[static_cast<size_t>(layer)],masterIncrement);
+                * webplaysynth::dsp::polyBlep(phase2[static_cast<size_t>(layer)],masterIncrement);
         } else {
-            s2=oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave,
+            s2=webplaysynth::dsp::oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave,
                 juce::jlimit(0.05f,0.95f,p.osc2PulseWidth+static_cast<float>(lfo)*p.lfoPulseDepth));
         }
         const auto fm=juce::jlimit(10.0,20000.0,f1+s2*p.crossMod);
         const auto oldPhase=phase1[static_cast<size_t>(layer)];
         const auto increment1=fm/sr;
-        const auto s1=oscillatorSample(oldPhase,increment1,p.osc1Wave,
+        const auto s1=webplaysynth::dsp::oscillatorSample(oldPhase,increment1,p.osc1Wave,
             juce::jlimit(0.05f,0.95f,p.osc1PulseWidth+static_cast<float>(lfo)*p.lfoPulseDepth));
         phase1[static_cast<size_t>(layer)]+=increment1;
         if(phase1[static_cast<size_t>(layer)]>=1) phase1[static_cast<size_t>(layer)]-=std::floor(phase1[static_cast<size_t>(layer)]);
@@ -783,46 +784,6 @@ void WebPlaySynthAudioProcessor::stopNote(int n, int channel)
                 voice.release();
         }
     }
-}
-float WebPlaySynthAudioProcessor::polyBlep(double t,double dt)
-{
-    if (dt <= 0)
-        return 0;
-    if (t < dt) {
-        const auto x = t / dt;
-        return static_cast<float>(x + x - x * x - 1);
-    }
-    if (t > 1 - dt) {
-        const auto x = (t - 1) / dt;
-        return static_cast<float>(x * x + x + x + 1);
-    }
-    return 0;
-}
-float WebPlaySynthAudioProcessor::waveformSample(double phase,int wave)
-{
-    switch(wave) {
-        case 0:return static_cast<float>(std::sin(phase*juce::MathConstants<double>::twoPi));
-        case 1:return static_cast<float>(1.0-4.0*std::abs(phase-.5));
-        case 2:return static_cast<float>(2.0*phase-1.0);
-        case 3:return phase<.5?1.0f:-1.0f;
-        default:return 0;
-    }
-}
-float WebPlaySynthAudioProcessor::oscillatorSample(double phase,double inc,int wave,float pulseWidth)
-{
-    if (wave == 3) {
-        const auto width=juce::jlimit(0.05f,0.95f,pulseWidth);
-        auto sample=phase<width?1.0f:-1.0f;
-        sample+=polyBlep(phase,inc);
-        auto pulseEdge=phase-width;
-        if(pulseEdge<0.0) pulseEdge+=1.0;
-        sample-=polyBlep(pulseEdge,inc);
-        return sample;
-    }
-
-    auto sample=waveformSample(phase,wave);
-    if(wave==2) sample-=polyBlep(phase,inc);
-    return sample;
 }
 juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return new WebPlaySynthAudioProcessorEditor(*this); }
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)

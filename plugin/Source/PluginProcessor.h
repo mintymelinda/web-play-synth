@@ -96,9 +96,6 @@ private:
     std::array<float, 16> channelPitchBendSemitones {};
     std::array<float, 16> channelAftertouch {};
     std::array<bool, 16> sustainPedalDown {};
-    static float oscillatorSample(double phase, double increment, int waveform, float pulseWidth = 0.5f);
-    static float polyBlep(double phase, double increment);
-    static float waveformSample(double phase, int waveform);
     std::array<Voice,16> voices;
     juce::Reverb reverb;
     std::vector<float> chorusBufferLeft, chorusBufferRight;
