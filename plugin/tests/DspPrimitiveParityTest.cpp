@@ -375,6 +375,7 @@ void assertLfoDestinationMatchesRenderedReference(
 {
     constexpr float rate = 4.5f;
     constexpr float velocity = 0.8f;
+    const auto midiVelocity = juce::MidiMessage::noteOn(1, 69, velocity).getFloatVelocity();
     constexpr int blockCount = 128;
 
     const auto actual = render([=](WebPlaySynthAudioProcessor& processor) {
@@ -421,7 +422,6 @@ void assertLfoDestinationMatchesRenderedReference(
     setParameter(directProcessor, "lfoAmpDepth", ampDepth);
     setParameter(directProcessor, "lfoPanDepth", panDepth);
     setParameter(directProcessor, "lfoPulseDepth", pulseDepth);
-    constexpr float midiVelocity = 102.0f / 127.0f;
     WebPlaySynthAudioProcessorTestAccess::startVoice(directProcessor, midiVelocity);
     std::vector<float> directVoiceLeft;
     directVoiceLeft.reserve(actual.left.size());
@@ -439,7 +439,7 @@ void assertLfoDestinationMatchesRenderedReference(
                       << "LFO isolation at sample 7948: processorLeft="
                       << actual.left[sample] << ", directVoiceLeft=" << voiceLeft
                       << ", directOscillator=" << oscillatorLeft
-                      << ", midiVelocity=" << midiVelocity << '\\n';
+                      << ", midiVelocity=" << midiVelocity << '\n';
         }
     }
     directProcessor.releaseResources();
@@ -477,7 +477,7 @@ void assertLfoDestinationMatchesRenderedReference(
         leftFilter.setCutoffFrequency(cutoff);
         rightFilter.setCutoffFrequency(cutoff);
         const auto ampGain = (1.0f + lfo * ampDepth) / (1.0f + ampDepth);
-        const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * velocity;
+        const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * midiVelocity;
         const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * velocity;
         if (scenario[0] == 'p' && (sample == 0 || sample == 1 || sample == 7948)) {
             std::cout << std::setprecision(12)
