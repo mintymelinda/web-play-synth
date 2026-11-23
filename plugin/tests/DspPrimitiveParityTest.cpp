@@ -279,9 +279,19 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
 
         const auto expectedLeft = leftFilter.processSample(0, oscillator) * velocity;
         const auto expectedRight = rightFilter.processSample(0, oscillator) * velocity;
-        require(std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft) < 3.0e-6f,
+        const auto leftError = std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft);
+        const auto rightError = std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight);
+        if (leftError >= 3.0e-6f || rightError >= 3.0e-6f) {
+            std::cerr << "filter parity sample=" << sample
+                      << " envelope=" << envelope << " cutoff=" << cutoff
+                      << " actual=(" << actual.left[static_cast<size_t>(sample)] << ", "
+                      << actual.right[static_cast<size_t>(sample)] << ") expected=("
+                      << expectedLeft << ", " << expectedRight << ") errors=("
+                      << leftError << ", " << rightError << ")\\n";
+        }
+        require(leftError < 3.0e-6f,
             "filter-envelope rendered left channel must match JUCE ADSR and TPT filter");
-        require(std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight) < 3.0e-6f,
+        require(rightError < 3.0e-6f,
             "filter-envelope rendered right channel must match JUCE ADSR and TPT filter");
     }
 }
