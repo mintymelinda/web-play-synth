@@ -305,6 +305,34 @@ void testFilterEnvelopeRenderedOutputMatchesJuceAdsr()
     processor.releaseResources();
 }
 
+struct ErrorStats {
+    size_t count = 0;
+    double mean = 0.0;
+    double sumSquared = 0.0;
+    double m2 = 0.0;
+    double maxAbsolute = 0.0;
+
+    void add(double error)
+    {
+        ++count;
+        const auto delta = error - mean;
+        mean += delta / static_cast<double>(count);
+        m2 += delta * (error - mean);
+        sumSquared += error * error;
+        maxAbsolute = std::max(maxAbsolute, std::abs(error));
+    }
+
+    double standardDeviation() const
+    {
+        return count == 0 ? 0.0 : std::sqrt(m2 / static_cast<double>(count));
+    }
+
+    double rms() const
+    {
+        return count == 0 ? 0.0 : std::sqrt(sumSquared / static_cast<double>(count));
+    }
+};
+
 void assertLfoDestinationMatchesRenderedReference(
     int oscillatorWave,
     float pitchDepth,
@@ -347,6 +375,14 @@ void assertLfoDestinationMatchesRenderedReference(
     leftFilter.setResonance(0.1f);
     rightFilter.setResonance(0.1f);
 
+    constexpr double maxAbsoluteErrorThreshold = 4.0e-6;
+    ErrorStats leftErrors;
+    ErrorStats rightErrors;
+    double leftMaxSample = 0.0;
+    double rightMaxSample = 0.0;
+    int leftMaxSampleIndex = 0;
+    int rightMaxSampleIndex = 0;
+
     double lfoPhase = 0.0;
     double oscillatorPhase = 0.0;
     for (int sample = 0; sample < blockCount * blockSize; ++sample) {
@@ -374,27 +410,19 @@ void assertLfoDestinationMatchesRenderedReference(
         const auto ampGain = (1.0f + lfo * ampDepth) / (1.0f + ampDepth);
         const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * velocity;
         const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * velocity;
+        const auto leftDelta = static_cast<double>(actual.left[static_cast<size_t>(sample)] - expectedLeft);
+        const auto rightDelta = static_cast<double>(actual.right[static_cast<size_t>(sample)] - expectedRight);
 
-        const auto leftError = std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft);
-        const auto rightError = std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight);
-        if (leftError >= 4.0e-6f || rightError >= 4.0e-6f) {
-            std::cerr << "LFO parity mismatch: " << scenario
-                      << ", sample=" << sample
-                      << ", actualL=" << actual.left[static_cast<size_t>(sample)]
-                      << ", expectedL=" << expectedLeft
-                      << ", actualR=" << actual.right[static_cast<size_t>(sample)]
-                      << ", expectedR=" << expectedRight
-                      << ", leftError=" << leftError
-                      << ", rightError=" << rightError
-                      << ", lfo=" << lfo
-                      << ", oscillator=" << oscillator
-                      << ", cutoff=" << cutoff
-                      << ", ampGain=" << ampGain << '\n';
+        leftErrors.add(leftDelta);
+        rightErrors.add(rightDelta);
+        if (std::abs(leftDelta) > leftMaxSample) {
+            leftMaxSample = std::abs(leftDelta);
+            leftMaxSampleIndex = sample;
         }
-        require(leftError < 4.0e-6f,
-            "LFO destination rendered left channel must match the explicit reference path");
-        require(rightError < 4.0e-6f,
-            "LFO destination rendered right channel must match the explicit reference path");
+        if (std::abs(rightDelta) > rightMaxSample) {
+            rightMaxSample = std::abs(rightDelta);
+            rightMaxSampleIndex = sample;
+        }
 
         oscillatorPhase += oscillatorIncrement;
         if (oscillatorPhase >= 1.0)
@@ -404,6 +432,25 @@ void assertLfoDestinationMatchesRenderedReference(
         if (lfoPhase >= 1.0)
             lfoPhase -= std::floor(lfoPhase);
     }
+
+    std::cout << "LFO parity score: " << scenario
+              << ", samples=" << leftErrors.count
+              << ", left(mean=" << leftErrors.mean
+              << ", stddev=" << leftErrors.standardDeviation()
+              << ", rms=" << leftErrors.rms()
+              << ", max=" << leftErrors.maxAbsolute
+              << " at " << leftMaxSampleIndex << ")"
+              << ", right(mean=" << rightErrors.mean
+              << ", stddev=" << rightErrors.standardDeviation()
+              << ", rms=" << rightErrors.rms()
+              << ", max=" << rightErrors.maxAbsolute
+              << " at " << rightMaxSampleIndex << ")"
+              << ", maxThreshold=" << maxAbsoluteErrorThreshold << '\\n';
+
+    require(leftErrors.maxAbsolute < maxAbsoluteErrorThreshold,
+        "LFO destination rendered left-channel maximum error must remain below threshold");
+    require(rightErrors.maxAbsolute < maxAbsoluteErrorThreshold,
+        "LFO destination rendered right-channel maximum error must remain below threshold");
 }
 
 void testLfoDestinationsMatchRenderedReference()
