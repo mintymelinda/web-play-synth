@@ -389,7 +389,7 @@ void assertLfoDestinationMatchesRenderedReference(
                       << ", lfo=" << lfo
                       << ", oscillator=" << oscillator
                       << ", cutoff=" << cutoff
-                      << ", ampGain=" << ampGain << '\\n';
+                      << ", ampGain=" << ampGain << '\n';
         }
         require(leftError < 4.0e-6f,
             "LFO destination rendered left channel must match the explicit reference path");
