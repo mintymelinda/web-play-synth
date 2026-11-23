@@ -14,14 +14,14 @@ struct WebPlaySynthAudioProcessorTestAccess
             [](const auto& voice) { return voice.active; }));
     }
 
-    static float ampEnvelopeValue(const WebPlaySynthAudioProcessor& processor)
+    static float ampEnvelopeValue(WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].ampEnvelope.getCurrentValue();
+        return processor.voices[0].ampEnvelope.getNextSample();
     }
 
-    static float filterEnvelopeValue(const WebPlaySynthAudioProcessor& processor)
+    static float filterEnvelopeValue(WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].filterEnvelope.getCurrentValue();
+        return processor.voices[0].filterEnvelope.getNextSample();
     }
 };
 

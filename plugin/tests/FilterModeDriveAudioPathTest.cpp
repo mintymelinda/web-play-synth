@@ -21,7 +21,7 @@ void setParameter(WebPlaySynthAudioProcessor& processor, const char* id, float v
     parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
 }
 
-std::vector<float> renderFilter(int filterType, float drive)
+std::vector<float> renderFilter(int filterType, float drive, float resonance = 0.7f, float cutoff = 1800.0f)
 {
     WebPlaySynthAudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
@@ -30,8 +30,8 @@ std::vector<float> renderFilter(int filterType, float drive)
     setParameter(processor, "osc1Level", 1.0f);
     setParameter(processor, "osc2Level", 0.0f);
     setParameter(processor, "master", 1.0f);
-    setParameter(processor, "cutoff", 1800.0f);
-    setParameter(processor, "resonance", 0.7f);
+    setParameter(processor, "cutoff", cutoff);
+    setParameter(processor, "resonance", resonance);
     setParameter(processor, "filterContour", 0.0f);
     setParameter(processor, "filterType", static_cast<float>(filterType));
     setParameter(processor, "filterDrive", drive);
@@ -92,6 +92,13 @@ int main()
         "band-pass mode must produce a finite, non-silent filtered signal");
     require(differenceEnergy(lowPass, bandPass) > 0.01,
         "band-pass mode must differ from low-pass mode in rendered audio");
+
+    const auto bandPassLowQ = renderFilter(2, 0.0f, 0.7f, 440.0f);
+    const auto bandPassHighQ = renderFilter(2, 0.0f, 18.0f, 440.0f);
+    const auto lowQEnergy = energy(bandPassLowQ);
+    const auto highQEnergy = energy(bandPassHighQ);
+    require(highQEnergy > lowQEnergy * 0.7 && highQEnergy < lowQEnergy * 1.3,
+        "band-pass resonance must change bandwidth without introducing Q-dependent output gain");
 
     const auto clean = renderFilter(0, 0.0f);
     const auto driven = renderFilter(0, 12.0f);

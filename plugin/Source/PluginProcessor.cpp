@@ -66,6 +66,7 @@ void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
         filter.reset();
     }
     currentFilterType=0;
+    filterSmoothingCoefficient = static_cast<float>(1.0 - std::exp(-1.0 / (0.015 * sr)));
     ampEnvelope.setSampleRate(sr); filterEnvelope.setSampleRate(sr);
 }
 void WebPlaySynthAudioProcessor::Voice::start(
@@ -86,6 +87,11 @@ void WebPlaySynthAudioProcessor::Voice::start(
     targetFrequency=juce::MidiMessage::getMidiNoteInHertz(n)
         * std::pow(2.0, static_cast<double>(pitchBendSemitones) / 12.0);
     currentFrequency=p.glideEnabled && previous>0 ? previous : targetFrequency;
+    currentCutoff=p.cutoff;
+    currentResonance=p.resonance;
+    appliedResonance=p.resonance;
+    for (auto& filter : filters)
+        filter.setResonance(p.resonance);
     ampEnvelope.setParameters({p.ampAttack,p.ampDecay,p.ampSustain,p.ampRelease});
     filterEnvelope.setParameters({p.filterAttack,p.filterDecay,p.filterSustain,p.filterRelease});
     ampEnvelope.noteOn();
@@ -194,20 +200,28 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     const auto filterEnvelopeValue=filterEnvelope.getNextSample();
     const auto amp=p.ampEnvEnabled?ampEnvelopeValue:1.0f;
     const auto env=p.filterEnvEnabled?filterEnvelopeValue:0.0f;
-    const auto cutoff=juce::jlimit(30.0f,19000.0f,p.cutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
+    // Match Web Audio AudioParam.setTargetAtTime(..., 0.015): native
+    // filter controls must not jump discontinuously between audio blocks.
+    currentCutoff += (p.cutoff - currentCutoff) * filterSmoothingCoefficient;
+    currentResonance += (p.resonance - currentResonance) * filterSmoothingCoefficient;
+    const auto cutoff=juce::jlimit(30.0f,19000.0f,currentCutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
     const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * p.filterDriveGain) : mixLeft;
     const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * p.filterDriveGain) : mixRight;
-    if (currentResonance != p.resonance) {
+    if (std::abs(currentResonance - appliedResonance) >= 0.01f) {
         for (auto& filter : filters)
-            filter.setResonance(p.resonance);
-        currentResonance=p.resonance;
+            filter.setResonance(currentResonance);
+        appliedResonance = currentResonance;
     }
     for (auto& filter : filters)
         filter.setCutoffFrequency(cutoff);
     const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
     const auto pressureGain=1.0f+juce::jlimit(0.0f,1.0f,aftertouch)*p.aftertouchDepth;
-    left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity*pressureGain;
-    right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity*pressureGain;
+    // JUCE's TPT band-pass output is Q-scaled, unlike Web Audio's
+    // normalized BiquadFilterNode band-pass response. Compensate by R2
+    // (1 / Q) so resonance changes bandwidth without adding output gain.
+    const auto bandpassGain = p.filterType == 2 ? 1.0f / currentResonance : 1.0f;
+    left=filters[0].processSample(0,drivenLeft)*bandpassGain*amp*ampLfo*velocity*pressureGain;
+    right=filters[1].processSample(0,drivenRight)*bandpassGain*amp*ampLfo*velocity*pressureGain;
 }
 
 

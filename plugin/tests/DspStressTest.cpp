@@ -69,6 +69,11 @@ void renderStressCase(double sampleRate)
     juce::MidiBuffer midi;
     double energy = 0.0;
     float peak = 0.0f;
+    int peakBlock = -1;
+    int peakFilterType = -1;
+    float peakCutoff = 0.0f;
+    int currentFilterType = 2;
+    float currentCutoff = 6500.0f;
     constexpr int blocks = 320;
     for (int block = 0; block < blocks; ++block) {
         midi.clear();
@@ -81,8 +86,10 @@ void renderStressCase(double sampleRate)
                 midi.addEvent(juce::MidiMessage::noteOff(1, 36 + note * 3), 0);
         }
         if (block % 16 == 0) {
-            setParameter(processor, "cutoff", (block % 32 == 0) ? 80.0f : 18000.0f);
-            setParameter(processor, "filterType", static_cast<float>((block / 16) % 3));
+            currentCutoff = (block % 32 == 0) ? 80.0f : 18000.0f;
+            currentFilterType = (block / 16) % 3;
+            setParameter(processor, "cutoff", currentCutoff);
+            setParameter(processor, "filterType", static_cast<float>(currentFilterType));
             setParameter(processor, "lfoRate", (block % 32 == 0) ? 0.1f : 12.0f);
             setParameter(processor, "delayFeedback", (block % 32 == 0) ? 0.0f : 0.85f);
         }
@@ -92,13 +99,23 @@ void renderStressCase(double sampleRate)
             for (int sample = 0; sample < audio.getNumSamples(); ++sample) {
                 const auto value = audio.getSample(channel, sample);
                 require(std::isfinite(value), "full-load output must remain finite during parameter changes and release");
-                peak = juce::jmax(peak, std::abs(value));
+                const auto magnitude = std::abs(value);
+                if (magnitude > peak) {
+                    peak = magnitude;
+                    peakBlock = block;
+                    peakFilterType = currentFilterType;
+                    peakCutoff = currentCutoff;
+                }
                 energy += static_cast<double>(value) * value;
             }
         }
     }
 
     require(energy > 0.01, "stress render must contain non-silent audio");
+    if (peak >= 64.0f)
+        std::cerr << "stress sample rate " << sampleRate << " Hz produced peak " << peak
+                  << " at block " << peakBlock << ", filter mode " << peakFilterType
+                  << ", cutoff " << peakCutoff << '\\n';
     require(peak < 64.0f, "stress render must remain bounded under maximum configured processing");
     processor.releaseResources();
 }

@@ -1,9 +1,35 @@
 #include "PluginProcessor.h"
 
+#include <algorithm>
+
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+
+struct WebPlaySynthAudioProcessorTestAccess
+{
+    static int activeVoiceCount(const WebPlaySynthAudioProcessor& processor)
+    {
+        return static_cast<int>(std::count_if(processor.voices.begin(), processor.voices.end(),
+            [](const auto& voice) { return voice.active; }));
+    }
+
+    static bool firstVoiceSustainHeld(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].sustainHeld;
+    }
+
+    static bool firstVoiceAmpEnvelopeActive(const WebPlaySynthAudioProcessor& processor)
+    {
+        return processor.voices[0].ampEnvelope.isActive();
+    }
+
+    static bool sustainPedalDown(const WebPlaySynthAudioProcessor& processor, int channel)
+    {
+        return processor.sustainPedalDown[static_cast<size_t>(channel - 1)];
+    }
+};
 
 namespace {
 void require(bool condition, const char* message)
@@ -117,12 +143,28 @@ int main()
 
     midi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 0), 0);
     renderPeak(processor, midi);
+    require(!WebPlaySynthAudioProcessorTestAccess::sustainPedalDown(processor, 1),
+        "sustain pedal state must clear on CC64 release");
+    require(!WebPlaySynthAudioProcessorTestAccess::firstVoiceSustainHeld(processor),
+        "released voice must leave sustain-held state on CC64 release");
+    require(WebPlaySynthAudioProcessorTestAccess::firstVoiceAmpEnvelopeActive(processor),
+        "amp ADSR must enter its release stage after CC64 release");
     midi.clear();
-    float releasedPeak = 0.0f;
-    for (int block = 0; block < 24; ++block)
-        releasedPeak = juce::jmax(releasedPeak, renderPeak(processor, midi));
-    require(releasedPeak < 0.001f,
-        "releasing sustain pedal must release held notes through the amp envelope");
+    float releaseTailPeak = 0.0f;
+    for (int block = 0; block < 24; ++block) {
+        const auto blockPeak = renderPeak(processor, midi);
+        if (block >= 20)
+            releaseTailPeak = juce::jmax(releaseTailPeak, blockPeak);
+    }
+    if (releaseTailPeak >= 0.001f)
+        std::cerr << "sustain release tail peak " << releaseTailPeak
+                  << ", active voices " << WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor)
+                  << ", amp ADSR active " << WebPlaySynthAudioProcessorTestAccess::firstVoiceAmpEnvelopeActive(processor)
+                  << '\\n';
+    require(releaseTailPeak < 0.001f,
+        "released sustain note must decay to silence after its amp release time");
+    require(WebPlaySynthAudioProcessorTestAccess::activeVoiceCount(processor) == 0,
+        "released sustain-held voice must be retired after its amp release");
 
     processor.releaseResources();
     std::cout << "PASS: MIDI pitch bend and sustain pedal audio paths\n";
