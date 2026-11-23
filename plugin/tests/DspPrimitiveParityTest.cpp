@@ -26,7 +26,7 @@ struct WebPlaySynthAudioProcessorTestAccess {
         return processor.voices[0].currentFrequency;
     }
 
-    static void startVoice(WebPlaySynthAudioProcessor& processor, float velocity)
+    static void startVoice(WebPlaySynthAudioProcessor& processor, float velocity = 0.8f)
     {
         const auto parameters = processor.readParameters();
         processor.voices[0].start(69, velocity, 1, 0.0f, 0.0f, parameters, 0.0);
