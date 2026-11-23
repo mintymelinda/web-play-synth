@@ -206,8 +206,12 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         filter.setCutoffFrequency(cutoff);
     const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
     const auto pressureGain=1.0f+juce::jlimit(0.0f,1.0f,aftertouch)*p.aftertouchDepth;
-    left=filters[0].processSample(0,drivenLeft)*amp*ampLfo*velocity*pressureGain;
-    right=filters[1].processSample(0,drivenRight)*amp*ampLfo*velocity*pressureGain;
+    // JUCE's TPT band-pass output is Q-scaled, unlike Web Audio's
+    // normalized BiquadFilterNode band-pass response. Compensate by R2
+    // (1 / Q) so resonance changes bandwidth without adding output gain.
+    const auto bandpassGain = p.filterType == 2 ? 1.0f / p.resonance : 1.0f;
+    left=filters[0].processSample(0,drivenLeft)*bandpassGain*amp*ampLfo*velocity*pressureGain;
+    right=filters[1].processSample(0,drivenRight)*bandpassGain*amp*ampLfo*velocity*pressureGain;
 }
 
 
