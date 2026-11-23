@@ -1,9 +1,11 @@
 #include "PluginProcessor.h"
 #include "Dsp/Oscillator.h"
+#include "Dsp/Envelope.h"
 
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <functional>
 #include <vector>
 
 namespace {
@@ -88,6 +90,91 @@ void configureCommon(WebPlaySynthAudioProcessor& processor)
     setParameter(processor, "lfoPulseDepth", 0.0f);
 }
 
+
+void compareAdsrSequence(const char* name, const std::function<void(juce::ADSR&, webplaysynth::dsp::Adsr&)>& sequence)
+{
+    juce::ADSR juceEnvelope;
+    webplaysynth::dsp::Adsr portableEnvelope;
+    juceEnvelope.setSampleRate(sampleRate);
+    portableEnvelope.setSampleRate(sampleRate);
+
+    sequence(juceEnvelope, portableEnvelope);
+    require(juceEnvelope.isActive() == portableEnvelope.isActive(), name);
+}
+
+void advanceAndCompare(juce::ADSR& reference, webplaysynth::dsp::Adsr& candidate, int count, const char* name)
+{
+    for (int i = 0; i < count; ++i) {
+        const auto expected = reference.getNextSample();
+        const auto actual = candidate.getNextSample();
+        require(expected == actual, name);
+        require(reference.isActive() == candidate.isActive(), "ADSR active state must match JUCE");
+    }
+}
+
+void testPortableAdsrMatchesJuceStateMachine()
+{
+    compareAdsrSequence("standard ADSR sequence must match JUCE", [](juce::ADSR& reference, webplaysynth::dsp::Adsr& candidate) {
+        const juce::ADSR::Parameters parameters { 0.007f, 0.012f, 0.35f, 0.02f };
+        const webplaysynth::dsp::Adsr::Parameters portableParameters { 0.007f, 0.012f, 0.35f, 0.02f };
+        reference.setParameters(parameters);
+        candidate.setParameters(portableParameters);
+        reference.noteOn();
+        candidate.noteOn();
+        advanceAndCompare(reference, candidate, 400, "attack/decay/sustain samples must match JUCE");
+        reference.noteOff();
+        candidate.noteOff();
+        advanceAndCompare(reference, candidate, 1200, "release samples must match JUCE");
+    });
+
+    compareAdsrSequence("zero-time stages must match JUCE", [](juce::ADSR& reference, webplaysynth::dsp::Adsr& candidate) {
+        const juce::ADSR::Parameters parameters { 0.0f, 0.0f, 0.4f, 0.0f };
+        const webplaysynth::dsp::Adsr::Parameters portableParameters { 0.0f, 0.0f, 0.4f, 0.0f };
+        reference.setParameters(parameters);
+        candidate.setParameters(portableParameters);
+        reference.noteOn();
+        candidate.noteOn();
+        advanceAndCompare(reference, candidate, 8, "zero-time stage samples must match JUCE");
+        reference.noteOff();
+        candidate.noteOff();
+        advanceAndCompare(reference, candidate, 8, "zero-time release must match JUCE");
+    });
+
+    compareAdsrSequence("retrigger during release must match JUCE", [](juce::ADSR& reference, webplaysynth::dsp::Adsr& candidate) {
+        const juce::ADSR::Parameters parameters { 0.01f, 0.02f, 0.5f, 0.2f };
+        const webplaysynth::dsp::Adsr::Parameters portableParameters { 0.01f, 0.02f, 0.5f, 0.2f };
+        reference.setParameters(parameters);
+        candidate.setParameters(portableParameters);
+        reference.noteOn();
+        candidate.noteOn();
+        advanceAndCompare(reference, candidate, 180, "pre-release samples must match JUCE");
+        reference.noteOff();
+        candidate.noteOff();
+        advanceAndCompare(reference, candidate, 24, "release prefix must match JUCE");
+        reference.noteOn();
+        candidate.noteOn();
+        advanceAndCompare(reference, candidate, 240, "retriggered attack must preserve JUCE envelope value");
+    });
+
+    compareAdsrSequence("parameter changes during release must match JUCE", [](juce::ADSR& reference, webplaysynth::dsp::Adsr& candidate) {
+        const juce::ADSR::Parameters initial { 0.01f, 0.02f, 0.5f, 0.2f };
+        const webplaysynth::dsp::Adsr::Parameters portableInitial { 0.01f, 0.02f, 0.5f, 0.2f };
+        reference.setParameters(initial);
+        candidate.setParameters(portableInitial);
+        reference.noteOn();
+        candidate.noteOn();
+        advanceAndCompare(reference, candidate, 220, "pre-release parameter-change samples must match JUCE");
+        reference.noteOff();
+        candidate.noteOff();
+        advanceAndCompare(reference, candidate, 12, "release prefix before parameter change must match JUCE");
+        const juce::ADSR::Parameters changed { 0.03f, 0.04f, 0.25f, 0.15f };
+        const webplaysynth::dsp::Adsr::Parameters portableChanged { 0.03f, 0.04f, 0.25f, 0.15f };
+        reference.setParameters(changed);
+        candidate.setParameters(portableChanged);
+        advanceAndCompare(reference, candidate, 400, "release after parameter change must match JUCE");
+    });
+}
+
 void testAmpEnvelopeMatchesJuceAdsr()
 {
     constexpr float attack = 0.007f;
@@ -166,6 +253,7 @@ void testLfoAmplitudeMatchesRenderedReference()
 
 int main()
 {
+    testPortableAdsrMatchesJuceStateMachine();
     testAmpEnvelopeMatchesJuceAdsr();
     testLfoAmplitudeMatchesRenderedReference();
     std::cout << "PASS: JUCE ADSR and LFO amplitude rendered-output parity\n";
