@@ -377,6 +377,17 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
     for(auto& v:voices) v.prepare(sr,block);
+    // Set the parameter targets before setSampleRate() resets JUCE's smoothers,
+    // so the first dry block starts at unity instead of ramping from JUCE's
+    // constructor default gain.
+    juce::Reverb::Parameters initialReverbParameters;
+    initialReverbParameters.roomSize=parameters.getRawParameterValue("reverbRoom")->load();
+    initialReverbParameters.damping=parameters.getRawParameterValue("reverbDamping")->load();
+    initialReverbParameters.wetLevel=parameters.getRawParameterValue("reverbMix")->load();
+    initialReverbParameters.dryLevel=0.5f*(1.0f-initialReverbParameters.wetLevel);
+    initialReverbParameters.width=1.0f;
+    initialReverbParameters.freezeMode=0.0f;
+    reverb.setParameters(initialReverbParameters);
     reverb.setSampleRate(sr);
     reverb.reset();
     const auto chorusBufferSize=static_cast<size_t>(std::ceil(sr*0.05))+2;
