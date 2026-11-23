@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "Dsp/Envelope.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -69,7 +70,7 @@ private:
     };
     struct Voice {
         std::array<juce::dsp::StateVariableTPTFilter<float>, 2> filters;
-        juce::ADSR ampEnvelope, filterEnvelope;
+        webplaysynth::dsp::Adsr ampEnvelope, filterEnvelope;
         bool active=false, keyDown=false, sustainHeld=false;
         int note=-1, midiChannel=1, age=0;
         float pitchBendSemitones=0.0f, aftertouch=0.0f;
@@ -83,7 +84,8 @@ private:
         void start(int midiNote, float noteVelocity, int channel, float pitchBend, float pressure, const Parameters& p, double previousFrequency);
         void release();
         void stop();
-        void render(const Parameters& p, double sampleRate, float& left, float& right);
+        void render(const Parameters& p, double sampleRate, float& left, float& right,
+            float* oscillatorLeft = nullptr, float* oscillatorRight = nullptr);
     };
     static ParameterState::ParameterLayout createParameterLayout();
     Parameters readParameters() const;
