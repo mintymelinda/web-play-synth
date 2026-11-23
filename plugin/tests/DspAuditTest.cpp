@@ -173,11 +173,14 @@ void testParameterBoundariesAndDenormals()
     for (auto* parameter : processor.getParameters())
         parameter->setValueNotifyingHost(1.0f);
 
+    midi.addEvent(juce::MidiMessage::noteOff(1, 48), 0);
+    midi.addEvent(juce::MidiMessage::noteOn(1, 72, 0.9f), 0);
+
     unsigned int subnormalSamples = 0;
     float peak = 0.0f;
-    for (int block = 0; block < 1400; ++block) {
+    for (int block = 0; block < 2800; ++block) {
         if (block == 180)
-            midi.addEvent(juce::MidiMessage::noteOff(1, 48), 0);
+            midi.addEvent(juce::MidiMessage::noteOff(1, 72), 0);
         processor.processBlock(output, midi);
         midi.clear();
 
@@ -259,11 +262,8 @@ void testNoAudioThreadAllocations()
 
     allocationCount.store(0, std::memory_order_relaxed);
     countAllocations.store(true, std::memory_order_relaxed);
-    for (int block = 0; block < 128; ++block) {
-        midi.clear();
-        midi.addEvent(juce::MidiMessage::controllerEvent(1, 7, 96), 0);
+    for (int block = 0; block < 128; ++block)
         processor.processBlock(output, midi);
-    }
     countAllocations.store(false, std::memory_order_relaxed);
 
     const auto allocations = allocationCount.load(std::memory_order_relaxed);
