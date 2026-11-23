@@ -312,7 +312,8 @@ void assertLfoDestinationMatchesRenderedReference(
     float ampDepth,
     float panDepth,
     float pulseDepth,
-    float baseCutoff)
+    float baseCutoff,
+    const char* scenario)
 {
     constexpr float rate = 4.5f;
     constexpr float velocity = 0.8f;
@@ -374,9 +375,25 @@ void assertLfoDestinationMatchesRenderedReference(
         const auto expectedLeft = leftFilter.processSample(0, inputLeft) * ampGain * velocity;
         const auto expectedRight = rightFilter.processSample(0, inputRight) * ampGain * velocity;
 
-        require(std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft) < 4.0e-6f,
+        const auto leftError = std::abs(actual.left[static_cast<size_t>(sample)] - expectedLeft);
+        const auto rightError = std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight);
+        if (leftError >= 4.0e-6f || rightError >= 4.0e-6f) {
+            std::cerr << "LFO parity mismatch: " << scenario
+                      << ", sample=" << sample
+                      << ", actualL=" << actual.left[static_cast<size_t>(sample)]
+                      << ", expectedL=" << expectedLeft
+                      << ", actualR=" << actual.right[static_cast<size_t>(sample)]
+                      << ", expectedR=" << expectedRight
+                      << ", leftError=" << leftError
+                      << ", rightError=" << rightError
+                      << ", lfo=" << lfo
+                      << ", oscillator=" << oscillator
+                      << ", cutoff=" << cutoff
+                      << ", ampGain=" << ampGain << '\\n';
+        }
+        require(leftError < 4.0e-6f,
             "LFO destination rendered left channel must match the explicit reference path");
-        require(std::abs(actual.right[static_cast<size_t>(sample)] - expectedRight) < 4.0e-6f,
+        require(rightError < 4.0e-6f,
             "LFO destination rendered right channel must match the explicit reference path");
 
         oscillatorPhase += oscillatorIncrement;
@@ -391,11 +408,11 @@ void assertLfoDestinationMatchesRenderedReference(
 
 void testLfoDestinationsMatchRenderedReference()
 {
-    assertLfoDestinationMatchesRenderedReference(0, 25.0f, 0.0f, 0.0f, 0.0f, 0.0f, 18000.0f);
-    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 3000.0f, 0.0f, 0.0f, 0.0f, 1200.0f);
-    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.65f, 0.0f, 0.0f, 18000.0f);
-    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.0f, 0.85f, 0.0f, 18000.0f);
-    assertLfoDestinationMatchesRenderedReference(3, 0.0f, 0.0f, 0.0f, 0.0f, 0.4f, 18000.0f);
+    assertLfoDestinationMatchesRenderedReference(0, 25.0f, 0.0f, 0.0f, 0.0f, 0.0f, 18000.0f, "pitch");
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 3000.0f, 0.0f, 0.0f, 0.0f, 1200.0f, "filter");
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.65f, 0.0f, 0.0f, 18000.0f, "amplitude");
+    assertLfoDestinationMatchesRenderedReference(0, 0.0f, 0.0f, 0.0f, 0.85f, 0.0f, 18000.0f, "pan");
+    assertLfoDestinationMatchesRenderedReference(3, 0.0f, 0.0f, 0.0f, 0.0f, 0.4f, 18000.0f, "pulse-width");
 }
 
 void testLfoAmplitudeMatchesRenderedReference()
