@@ -4,6 +4,7 @@
 #include "Dsp/Lfo.h"
 #include "Dsp/TptFilter.h"
 #include "Dsp/Delay.h"
+#include "Dsp/Chorus.h"
 #include <array>
 #include <atomic>
 #include <vector>
