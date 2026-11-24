@@ -3,6 +3,7 @@
 #include "Dsp/Envelope.h"
 #include "Dsp/Lfo.h"
 #include "Dsp/TptFilter.h"
+#include "Dsp/Delay.h"
 #include <array>
 #include <atomic>
 #include <vector>
