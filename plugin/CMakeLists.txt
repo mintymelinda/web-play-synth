@@ -84,7 +84,9 @@ if(BUILD_TESTING)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(WebPlaySynth PRIVATE -fsanitize=address -fno-omit-frame-pointer)
         target_compile_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-        target_link_options(WebPlaySynth PRIVATE -fsanitize=address)
+        # WebPlaySynth is a static shared-code library. Every generated format
+        # target and test executable that consumes it must link the ASan runtime.
+        target_link_options(WebPlaySynth INTERFACE -fsanitize=address)
         target_link_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address)
         set_tests_properties(native-synth-smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1")
     endif()
