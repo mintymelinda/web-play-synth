@@ -12,8 +12,8 @@ enum class TptFilterType {
 };
 
 // JUCE StateVariableTPTFilter-compatible topology-preserving state-variable
-// filter. This header is deliberately independent of JUCE so the same DSP
-// primitive can be compiled into the native plugin and the future WASM core.
+// filter. The state update and output equations intentionally mirror JUCE's
+// implementation so the primitive can be shared with the future WASM core.
 class TptFilter {
 public:
     void prepare(double newSampleRate) noexcept
@@ -30,7 +30,7 @@ public:
 
     void setCutoffFrequency(float newCutoff) noexcept
     {
-        cutoff = std::clamp(newCutoff, 1.0f, static_cast<float>(sampleRate * 0.5));
+        cutoff = newCutoff;
         updateCoefficients();
     }
 
@@ -42,25 +42,27 @@ public:
 
     void reset() noexcept
     {
-        integrator1 = 0.0f;
-        integrator2 = 0.0f;
+        state1 = 0.0f;
+        state2 = 0.0f;
     }
 
     float processSample(float input) noexcept
     {
-        const auto v1 = h * (integrator1 + g * (input - integrator2));
-        const auto v2 = integrator2 + g * v1;
-        integrator1 = 2.0f * v1 - integrator1;
-        integrator2 = 2.0f * v2 - integrator2;
+        const auto highpass = h * (input - state1 * (g + r2) - state2);
+        const auto bandpass = highpass * g + state1;
+        state1 = highpass * g + bandpass;
+
+        const auto lowpass = bandpass * g + state2;
+        state2 = bandpass * g + lowpass;
 
         switch (type) {
             case TptFilterType::highpass:
-                return input - r2 * v1 - v2;
+                return highpass;
             case TptFilterType::bandpass:
-                return v1;
+                return bandpass;
             case TptFilterType::lowpass:
             default:
-                return v2;
+                return lowpass;
         }
     }
 
@@ -70,19 +72,21 @@ private:
         if (sampleRate <= 0.0)
             return;
 
-        r2 = 1.0f / resonance;
-        g = std::tan(3.14159265358979323846f * cutoff / sampleRate);
-        h = 1.0f / (1.0f + r2 * g + g * g);
+        // Preserve JUCE's precision and conversion points: tan() is evaluated
+        // in double precision, then each coefficient is stored as float.
+        g = static_cast<float>(std::tan(3.14159265358979323846 * cutoff / sampleRate));
+        r2 = static_cast<float>(1.0 / resonance);
+        h = static_cast<float>(1.0 / (1.0 + r2 * g + g * g));
     }
 
     double sampleRate = 44100.0;
     float cutoff = 1000.0f;
-    float resonance = 1.0f;
+    float resonance = 0.7071067811865475f;
     float g = 0.0f;
     float h = 1.0f;
-    float r2 = 1.0f;
-    float integrator1 = 0.0f;
-    float integrator2 = 0.0f;
+    float r2 = 1.4142135623730951f;
+    float state1 = 0.0f;
+    float state2 = 0.0f;
     TptFilterType type = TptFilterType::lowpass;
 };
 
