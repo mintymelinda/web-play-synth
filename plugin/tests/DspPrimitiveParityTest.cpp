@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "Dsp/Oscillator.h"
 #include "Dsp/Envelope.h"
+#include "Dsp/Lfo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,7 +14,7 @@
 struct WebPlaySynthAudioProcessorTestAccess {
     static double voiceLfoPhase(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].lfoPhase;
+        return processor.voices[0].lfoOscillator.getPhase();
     }
 
     static double voiceOscillatorPhase(const WebPlaySynthAudioProcessor& processor)
@@ -235,6 +236,37 @@ void testPortableAdsrMatchesJuceStateMachine()
         candidate.setParameters(portableChanged);
         advanceAndCompare(reference, candidate, 400, "release after parameter change must match JUCE");
     });
+}
+
+void testPortableLfoMatchesReferencePhaseProgression()
+{
+    constexpr double sampleRates[] { 44100.0, 48000.0, 96000.0 };
+    constexpr float rates[] { 0.1f, 4.5f, 20.0f };
+
+    for (const auto sampleRate : sampleRates) {
+        for (const auto rate : rates) {
+            for (int waveform = 0; waveform < 4; ++waveform) {
+                webplaysynth::dsp::Lfo candidate;
+                double referencePhase = 0.0;
+
+                for (int sample = 0; sample < 2 * static_cast<int>(sampleRate); ++sample) {
+                    const auto expected = webplaysynth::dsp::waveformSample(referencePhase, waveform);
+                    const auto actual = candidate.nextSample(rate, sampleRate, waveform);
+                    require(actual == expected,
+                        "portable LFO samples must preserve the existing waveform sequence");
+                    referencePhase += static_cast<double>(rate) / sampleRate;
+                    if (referencePhase >= 1.0)
+                        referencePhase -= std::floor(referencePhase);
+                    require(candidate.getPhase() == referencePhase,
+                        "portable LFO phase must preserve exact wrap progression");
+                }
+
+                candidate.reset();
+                require(candidate.getPhase() == 0.0,
+                    "portable LFO reset must return phase to zero");
+            }
+        }
+    }
 }
 
 void testAmpEnvelopeMatchesJuceAdsr()
@@ -606,6 +638,7 @@ void testLfoAmplitudeMatchesRenderedReference()
 int main()
 {
     testPortableAdsrMatchesJuceStateMachine();
+    testPortableLfoMatchesReferencePhaseProgression();
     testAmpEnvelopeMatchesJuceAdsr();
     testFilterEnvelopeRenderedOutputMatchesJuceAdsr();
     testLfoAmplitudeMatchesRenderedReference();
