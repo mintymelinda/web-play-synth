@@ -60,11 +60,11 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     return l;
 }
 
-void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
+void WebPlaySynthAudioProcessor::Voice::prepare(double sr)
 {
     for (auto& filter : filters) {
-        filter.prepare({sr,static_cast<juce::uint32>(block),1});
-        filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+        filter.prepare(sr);
+        filter.setType(webplaysynth::dsp::TptFilterType::lowpass);
         filter.reset();
     }
     currentFilterType=0;
@@ -130,9 +130,9 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     const auto glide=p.glideCoefficient;
     currentFrequency+=(targetFrequency-currentFrequency)*glide;
     if (currentFilterType != p.filterType) {
-        const auto type = p.filterType == 1 ? juce::dsp::StateVariableTPTFilterType::highpass
-            : p.filterType == 2 ? juce::dsp::StateVariableTPTFilterType::bandpass
-                                : juce::dsp::StateVariableTPTFilterType::lowpass;
+        const auto type = p.filterType == 1 ? webplaysynth::dsp::TptFilterType::highpass
+            : p.filterType == 2 ? webplaysynth::dsp::TptFilterType::bandpass
+                                : webplaysynth::dsp::TptFilterType::lowpass;
         for (auto& filter : filters) filter.setType(type);
         currentFilterType = p.filterType;
     }
@@ -226,8 +226,8 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     // normalized BiquadFilterNode band-pass response. Compensate by R2
     // (1 / Q) so resonance changes bandwidth without adding output gain.
     const auto bandpassGain = p.filterType == 2 ? 1.0f / currentResonance : 1.0f;
-    left=filters[0].processSample(0,drivenLeft)*bandpassGain*amp*ampLfo*velocity*pressureGain;
-    right=filters[1].processSample(0,drivenRight)*bandpassGain*amp*ampLfo*velocity*pressureGain;
+    left=filters[0].processSample(drivenLeft)*bandpassGain*amp*ampLfo*velocity*pressureGain;
+    right=filters[1].processSample(drivenRight)*bandpassGain*amp*ampLfo*velocity*pressureGain;
 }
 
 
@@ -372,10 +372,10 @@ double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
     return tailSeconds;
 }
 
-void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
+void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
-    for(auto& v:voices) v.prepare(sr,block);
+    for(auto& v:voices) v.prepare(sr);
     // Set the parameter targets before setSampleRate() resets JUCE's smoothers,
     // so the first dry block starts at unity instead of ramping from JUCE's
     // constructor default gain.
