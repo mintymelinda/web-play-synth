@@ -86,7 +86,7 @@ void compareScenario(double sampleRate, int channels)
     constexpr std::array<float, 5> mixes { 0.0f, 0.2f, 0.5f, 0.9f, 1.0f };
 
     int globalSample = 0;
-    for (int block = 0; block < 180; ++block) {
+    for (int block = 0; block < 1600; ++block) {
         const auto count = blockSizes[static_cast<size_t>(block) % blockSizes.size()];
         const auto time = times[static_cast<size_t>(block) % times.size()];
         const auto feedback = feedbacks[static_cast<size_t>(block * 3) % feedbacks.size()];
