@@ -81,6 +81,13 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
     target_link_libraries(WebPlaySynthSmokeTest PRIVATE WebPlaySynth juce::juce_audio_utils)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(WebPlaySynth PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_compile_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(WebPlaySynth PRIVATE -fsanitize=address)
+        target_link_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address)
+        set_tests_properties(native-synth-smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1")
+    endif()
 
     add_executable(WebPlaySynthAudioPathTest tests/AudioPathRegressionTest.cpp)
     target_include_directories(WebPlaySynthAudioPathTest PRIVATE
