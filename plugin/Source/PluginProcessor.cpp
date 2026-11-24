@@ -60,7 +60,7 @@ WebPlaySynthAudioProcessor::ParameterState::ParameterLayout WebPlaySynthAudioPro
     return l;
 }
 
-void WebPlaySynthAudioProcessor::Voice::prepare(double sr,int block)
+void WebPlaySynthAudioProcessor::Voice::prepare(double sr)
 {
     for (auto& filter : filters) {
         filter.prepare(sr);
@@ -375,7 +375,7 @@ double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
 void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
-    for(auto& v:voices) v.prepare(sr,block);
+    for(auto& v:voices) v.prepare(sr);
     // Set the parameter targets before setSampleRate() resets JUCE's smoothers,
     // so the first dry block starts at unity instead of ramping from JUCE's
     // constructor default gain.
