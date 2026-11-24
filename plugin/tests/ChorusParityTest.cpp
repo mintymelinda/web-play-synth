@@ -131,19 +131,32 @@ void compare(double sampleRate, int channels)
         globalSample += count;
     }
 
+    // Leave an impulse in the delay line, then reset. A long zero-input
+    // render catches stale history (including the maximum 28 ms modulated tap).
+    std::array<float, 1> seedLeft { 1.0f };
+    std::array<float, 1> seedRight { 0.5f };
+    actual.process(seedLeft.data(), channels > 1 ? seedRight.data() : nullptr,
+        channels, 1, 0.8f, 0.5f, 0.0f);
+    expected.process(seedLeft.data(), channels > 1 ? seedRight.data() : nullptr,
+        channels, 1, 0.8f, 0.5f, 0.0f);
     actual.reset();
     expected.reset();
-    std::array<float, 16> actualLeft { 1.0f };
-    auto expectedLeft = actualLeft;
-    std::array<float, 16> actualRight { 0.5f };
-    auto expectedRight = actualRight;
+    std::vector<float> actualLeft(4096, 0.0f);
+    std::vector<float> expectedLeft(4096, 0.0f);
+    std::vector<float> actualRight(4096, 0.0f);
+    std::vector<float> expectedRight(4096, 0.0f);
     actual.process(actualLeft.data(), channels > 1 ? actualRight.data() : nullptr,
         channels, static_cast<int>(actualLeft.size()), 0.8f, 0.5f, 1.0f);
     expected.process(expectedLeft.data(), channels > 1 ? expectedRight.data() : nullptr,
         channels, static_cast<int>(expectedLeft.size()), 0.8f, 0.5f, 1.0f);
     require(actualLeft == expectedLeft, "reset must clear chorus history, phase, and write position");
-    if (channels > 1)
+    require(std::all_of(actualLeft.begin(), actualLeft.end(), [](float value) { return value == 0.0f; }),
+        "reset must prevent pre-reset left-channel audio from reappearing");
+    if (channels > 1) {
         require(actualRight == expectedRight, "stereo reset must clear both chorus channels");
+        require(std::all_of(actualRight.begin(), actualRight.end(), [](float value) { return value == 0.0f; }),
+            "reset must prevent pre-reset right-channel audio from reappearing");
+    }
 }
 }
 
