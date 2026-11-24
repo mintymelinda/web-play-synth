@@ -95,7 +95,7 @@ if(BUILD_TESTING)
         # Do not instrument the plugin shared-code archive: JUCE loads generated
         # VST3/Standalone targets in helper processes that cannot guarantee the
         # ASan runtime is first in their initial library list.
-        target_compile_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_compile_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g -fno-inline)
         target_link_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address)
         set_tests_properties(native-synth-smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1")
     endif()
