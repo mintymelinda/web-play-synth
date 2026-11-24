@@ -38,6 +38,15 @@ if(BUILD_TESTING)
     target_include_directories(WebPlaySynthDelayParityTest PRIVATE Source)
     target_compile_features(WebPlaySynthDelayParityTest PRIVATE cxx_std_17)
     add_test(NAME native-portable-delay-parity COMMAND WebPlaySynthDelayParityTest)
+    add_executable(WebPlaySynthReverbParityTest tests/ReverbParityTest.cpp)
+    target_include_directories(WebPlaySynthReverbParityTest PRIVATE Source)
+    target_compile_features(WebPlaySynthReverbParityTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthReverbParityTest PRIVATE
+        juce::juce_audio_basics
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+    )
+    add_test(NAME native-portable-reverb-parity COMMAND WebPlaySynthReverbParityTest)
     add_executable(WebPlaySynthChorusParityTest tests/ChorusParityTest.cpp)
     target_include_directories(WebPlaySynthChorusParityTest PRIVATE Source)
     target_compile_features(WebPlaySynthChorusParityTest PRIVATE cxx_std_17)
