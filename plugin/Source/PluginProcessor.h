@@ -106,8 +106,7 @@ private:
     std::vector<float> chorusBufferLeft, chorusBufferRight;
     int chorusWritePosition=0;
     double chorusPhase=0;
-    std::vector<float> delayBufferLeft, delayBufferRight;
-    int delayWritePosition=0;
+    webplaysynth::dsp::StereoDelay delay;
     double currentSampleRate=44100, lastPlayedFrequency=0;
     int voiceAge=0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebPlaySynthAudioProcessor)

@@ -3,6 +3,7 @@
 #include "Dsp/Oscillator.h"
 #include "Dsp/Lfo.h"
 #include "Dsp/Modulation.h"
+#include "Dsp/Delay.h"
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
@@ -397,10 +398,7 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
     chorusBufferRight.assign(chorusBufferSize,0.0f);
     chorusWritePosition=0;
     chorusPhase=0.0;
-    const auto delayBufferSize=static_cast<size_t>(std::ceil(sr*2.0))+2;
-    delayBufferLeft.assign(delayBufferSize,0.0f);
-    delayBufferRight.assign(delayBufferSize,0.0f);
-    delayWritePosition=0;
+    delay.prepare(sr);
 }
 void WebPlaySynthAudioProcessor::releaseResources()
 {
@@ -413,9 +411,7 @@ void WebPlaySynthAudioProcessor::releaseResources()
     std::fill(chorusBufferRight.begin(),chorusBufferRight.end(),0.0f);
     chorusWritePosition=0;
     chorusPhase=0.0;
-    std::fill(delayBufferLeft.begin(),delayBufferLeft.end(),0.0f);
-    std::fill(delayBufferRight.begin(),delayBufferRight.end(),0.0f);
-    delayWritePosition=0;
+    delay.reset();
 }
 bool WebPlaySynthAudioProcessor::isBusesLayoutSupported(const BusesLayout& l) const
 {
@@ -553,30 +549,10 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
         }
     }
 
-    const auto bufferSize=static_cast<int>(delayBufferLeft.size());
-    if (bufferSize > 2 && channelCount > 0) {
-        const auto delaySamples=juce::jlimit(1,bufferSize-1,juce::roundToInt(p.delayTime*static_cast<float>(currentSampleRate)));
-        const auto feedback=juce::jlimit(0.0f,.85f,p.delayFeedback);
-        const auto mix=juce::jlimit(0.0f,1.0f,p.delayMix);
-        const auto stereo=channelCount > 1;
-        for (int sample=0; sample<sampleCount; ++sample) {
-            auto readPosition=delayWritePosition-delaySamples;
-            if (readPosition < 0) readPosition+=bufferSize;
-            const auto delayedLeft=delayBufferLeft[static_cast<size_t>(readPosition)];
-            const auto delayedRight=stereo ? delayBufferRight[static_cast<size_t>(readPosition)] : delayedLeft;
-            const auto inputLeft=output.getSample(0,sample);
-            if (stereo) {
-                const auto inputRight=output.getSample(1,sample);
-                delayBufferLeft[static_cast<size_t>(delayWritePosition)]=inputLeft+delayedRight*feedback;
-                delayBufferRight[static_cast<size_t>(delayWritePosition)]=inputRight+delayedLeft*feedback;
-                output.setSample(0,sample,inputLeft*(1.0f-mix)+delayedLeft*mix);
-                output.setSample(1,sample,inputRight*(1.0f-mix)+delayedRight*mix);
-            } else {
-                delayBufferLeft[static_cast<size_t>(delayWritePosition)]=inputLeft+delayedLeft*feedback;
-                output.setSample(0,sample,inputLeft*(1.0f-mix)+delayedLeft*mix);
-            }
-            if (++delayWritePosition >= bufferSize) delayWritePosition=0;
-        }
+    if (channelCount > 0) {
+        delay.process(output.getWritePointer(0),
+            channelCount > 1 ? output.getWritePointer(1) : nullptr,
+            channelCount, sampleCount, p.delayTime, p.delayFeedback, p.delayMix);
     }
 
     juce::Reverb::Parameters reverbParameters;
