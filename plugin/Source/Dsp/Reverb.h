@@ -18,6 +18,7 @@ public:
 
     void prepare(double newSampleRate, const Parameters& initial)
     {
+        prepared = false;
         sampleRate = newSampleRate;
         setParameters(initial);
         constexpr std::array<int, 8> combTunings {1116,1188,1277,1356,1422,1491,1557,1617};
@@ -36,6 +37,7 @@ public:
         damping.reset(rampSamples); feedback.reset(rampSamples);
         dryGain.reset(rampSamples); wetGain1.reset(rampSamples); wetGain2.reset(rampSamples);
         reset();
+        prepared = true;
     }
 
     void setParameters(const Parameters& p) noexcept
@@ -65,7 +67,7 @@ public:
 
     void processStereo(float* left, float* right, int count) noexcept
     {
-        if (left == nullptr || right == nullptr) return;
+        if (!prepared || left == nullptr || right == nullptr) return;
         for (int i = 0; i < count; ++i) {
             const auto input = (left[i] + right[i]) * gain;
             float outL = 0.0f, outR = 0.0f;
@@ -89,7 +91,7 @@ public:
 
     void processMono(float* samples, int count) noexcept
     {
-        if (samples == nullptr) return;
+        if (!prepared || samples == nullptr) return;
         for (int i = 0; i < count; ++i) {
             const auto input = samples[i] * gain;
             float output = 0.0f;
@@ -170,5 +172,6 @@ private:
     std::array<std::array<AllPass, 4>, 2> allPass;
     Smoother damping, feedback, dryGain, wetGain1, wetGain2;
     double sampleRate = 44100.0;
+    bool prepared = false;
 };
 } // namespace webplaysynth::dsp
