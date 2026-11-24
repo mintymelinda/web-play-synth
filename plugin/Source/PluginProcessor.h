@@ -83,7 +83,7 @@ private:
         int currentFilterType=-1;
         float currentCutoff=1800.0f, currentResonance=0.8f, appliedResonance=0.8f;
         float filterSmoothingCoefficient=0.0f;
-        void prepare(double sampleRate, int maximumBlockSize);
+        void prepare(double sampleRate);
         void start(int midiNote, float noteVelocity, int channel, float pitchBend, float pressure, const Parameters& p, double previousFrequency);
         void release();
         void stop();
