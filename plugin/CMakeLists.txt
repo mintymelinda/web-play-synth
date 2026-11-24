@@ -35,7 +35,11 @@ if(BUILD_TESTING)
     target_include_directories(WebPlaySynthTptFilterParityTest PRIVATE Source)
     target_compile_features(WebPlaySynthTptFilterParityTest PRIVATE cxx_std_17)
     target_compile_definitions(WebPlaySynthTptFilterParityTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    target_link_libraries(WebPlaySynthTptFilterParityTest PRIVATE juce::juce_dsp)
+    target_link_libraries(WebPlaySynthTptFilterParityTest PRIVATE
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+    )
     add_test(NAME native-tpt-filter-primitive-parity COMMAND WebPlaySynthTptFilterParityTest)
 
     add_executable(WebPlaySynthDspPrimitiveParityTest tests/DspPrimitiveParityTest.cpp)
