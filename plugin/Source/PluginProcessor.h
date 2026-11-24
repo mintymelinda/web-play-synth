@@ -4,6 +4,7 @@
 #include "Dsp/Lfo.h"
 #include "Dsp/TptFilter.h"
 #include "Dsp/Delay.h"
+#include "Dsp/Chorus.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -104,9 +105,7 @@ private:
     std::array<bool, 16> sustainPedalDown {};
     std::array<Voice,16> voices;
     juce::Reverb reverb;
-    std::vector<float> chorusBufferLeft, chorusBufferRight;
-    int chorusWritePosition=0;
-    double chorusPhase=0;
+    webplaysynth::dsp::StereoChorus chorus;
     webplaysynth::dsp::StereoDelay delay;
     double currentSampleRate=44100, lastPlayedFrequency=0;
     int voiceAge=0;
