@@ -86,14 +86,15 @@ if(BUILD_TESTING)
         "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
     )
     target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
-    target_link_libraries(WebPlaySynthSmokeTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    target_sources(WebPlaySynthSmokeTest PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp)
+    target_link_libraries(WebPlaySynthSmokeTest PRIVATE juce::juce_audio_utils juce::juce_dsp)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(WebPlaySynth PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        # Build an ASan-instrumented copy of the processor only for this test.
+        # Do not instrument the plugin shared-code archive: JUCE loads generated
+        # VST3/Standalone targets in helper processes that cannot guarantee the
+        # ASan runtime is first in their initial library list.
         target_compile_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-        # WebPlaySynth is a static shared-code library. Every generated format
-        # target and test executable that consumes it must link the ASan runtime.
-        target_link_options(WebPlaySynth INTERFACE -fsanitize=address)
         target_link_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address)
         set_tests_properties(native-synth-smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1")
     endif()
