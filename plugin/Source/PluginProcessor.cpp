@@ -4,6 +4,7 @@
 #include "Dsp/Lfo.h"
 #include "Dsp/Modulation.h"
 #include "Dsp/Delay.h"
+#include "Dsp/Chorus.h"
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
@@ -393,11 +394,7 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
     reverb.setParameters(initialReverbParameters);
     reverb.setSampleRate(sr);
     reverb.reset();
-    const auto chorusBufferSize=static_cast<size_t>(std::ceil(sr*0.05))+2;
-    chorusBufferLeft.assign(chorusBufferSize,0.0f);
-    chorusBufferRight.assign(chorusBufferSize,0.0f);
-    chorusWritePosition=0;
-    chorusPhase=0.0;
+    chorus.prepare(sr);
     delay.prepare(sr);
 }
 void WebPlaySynthAudioProcessor::releaseResources()
@@ -407,10 +404,7 @@ void WebPlaySynthAudioProcessor::releaseResources()
     channelAftertouch.fill(0.0f);
     sustainPedalDown.fill(false);
     reverb.reset();
-    std::fill(chorusBufferLeft.begin(),chorusBufferLeft.end(),0.0f);
-    std::fill(chorusBufferRight.begin(),chorusBufferRight.end(),0.0f);
-    chorusWritePosition=0;
-    chorusPhase=0.0;
+    chorus.reset();
     delay.reset();
 }
 bool WebPlaySynthAudioProcessor::isBusesLayoutSupported(const BusesLayout& l) const
@@ -508,45 +502,10 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
 {
     const auto channelCount=output.getNumChannels();
     const auto sampleCount=output.getNumSamples();
-    const auto chorusBufferSize=static_cast<int>(chorusBufferLeft.size());
-    if (chorusBufferSize > 2 && channelCount > 0) {
-        const auto mix=juce::jlimit(0.0f,1.0f,p.chorusMix);
-        const auto depthSeconds=0.008f*juce::jlimit(0.0f,1.0f,p.chorusDepth);
-        const auto rate=juce::jlimit(0.1f,5.0f,p.chorusRate);
-        const auto stereo=channelCount > 1;
-        const auto baseDelaySeconds=0.020f;
-        for (int sample=0; sample<sampleCount; ++sample) {
-            const auto inputLeft=output.getSample(0,sample);
-            const auto inputRight=stereo ? output.getSample(1,sample) : inputLeft;
-            chorusBufferLeft[static_cast<size_t>(chorusWritePosition)]=inputLeft;
-            chorusBufferRight[static_cast<size_t>(chorusWritePosition)]=inputRight;
-
-            const auto modLeft=std::sin(chorusPhase);
-            const auto modRight=stereo ? std::sin(chorusPhase+juce::MathConstants<double>::halfPi) : modLeft;
-            const auto delayLeft=(baseDelaySeconds+depthSeconds*modLeft)*currentSampleRate;
-            const auto delayRight=(baseDelaySeconds+depthSeconds*modRight)*currentSampleRate;
-            const auto readWet=[&](const std::vector<float>& buffer,double delaySamples) {
-                const auto wholeDelay=static_cast<int>(std::floor(delaySamples));
-                const auto fraction=static_cast<float>(delaySamples-wholeDelay);
-                auto first=chorusWritePosition-wholeDelay;
-                while(first<0) first+=chorusBufferSize;
-                auto second=first-1;
-                if(second<0) second+=chorusBufferSize;
-                const auto a=buffer[static_cast<size_t>(first)];
-                const auto b=buffer[static_cast<size_t>(second)];
-                return a+(b-a)*fraction;
-            };
-            const auto wetLeft=readWet(chorusBufferLeft,delayLeft);
-            const auto wetRight=stereo ? readWet(chorusBufferRight,delayRight) : wetLeft;
-            output.setSample(0,sample,inputLeft*(1.0f-mix)+wetLeft*mix);
-            if(stereo)
-                output.setSample(1,sample,inputRight*(1.0f-mix)+wetRight*mix);
-
-            chorusPhase+=rate/currentSampleRate;
-            if(chorusPhase>=juce::MathConstants<double>::twoPi)
-                chorusPhase-=juce::MathConstants<double>::twoPi;
-            if(++chorusWritePosition>=chorusBufferSize) chorusWritePosition=0;
-        }
+    if (channelCount > 0) {
+        chorus.process(output.getWritePointer(0),
+            channelCount > 1 ? output.getWritePointer(1) : nullptr,
+            channelCount, sampleCount, p.chorusRate, p.chorusDepth, p.chorusMix);
     }
 
     if (channelCount > 0) {
