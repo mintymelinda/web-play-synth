@@ -16,7 +16,7 @@ public:
         float dryLevel = 0.4f, width = 1.0f, freezeMode = 0.0f;
     };
 
-    void prepare(double newSampleRate, const Parameters& initial = {})
+    void prepare(double newSampleRate, const Parameters& initial)
     {
         sampleRate = newSampleRate;
         setParameters(initial);
