@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include "Dsp/Oscillator.h"
 #include "Dsp/Lfo.h"
+#include "Dsp/Modulation.h"
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
@@ -145,9 +146,10 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     float mixLeft=0.0f, mixRight=0.0f;
     for (int layer=0; layer<unisonCount; ++layer) {
         const auto detuneRatio = p.unisonDetuneRatios[static_cast<size_t>(layer)];
-        const auto mod = static_cast<double>(lfo*p.lfoPitchDepth);
-        const auto f1=juce::jlimit(10.0,20000.0,base1*detuneRatio+mod);
-        const auto f2=juce::jlimit(10.0,20000.0,base2*detuneRatio+mod);
+        const auto f1=juce::jlimit(10.0,20000.0,
+            webplaysynth::dsp::modulateFrequency(base1,detuneRatio,lfo,p.lfoPitchDepth));
+        const auto f2=juce::jlimit(10.0,20000.0,
+            webplaysynth::dsp::modulateFrequency(base2,detuneRatio,lfo,p.lfoPitchDepth));
         const auto inc2=f2/sr;
         float s2=0.0f;
         if (p.hardSync) {
@@ -165,13 +167,13 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
                 * webplaysynth::dsp::polyBlep(phase2[static_cast<size_t>(layer)],masterIncrement);
         } else {
             s2=webplaysynth::dsp::oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave,
-                juce::jlimit(0.05f,0.95f,p.osc2PulseWidth+static_cast<float>(lfo)*p.lfoPulseDepth));
+                webplaysynth::dsp::modulatePulseWidth(p.osc2PulseWidth,lfo,p.lfoPulseDepth));
         }
         const auto fm=juce::jlimit(10.0,20000.0,f1+s2*p.crossMod);
         const auto oldPhase=phase1[static_cast<size_t>(layer)];
         const auto increment1=fm/sr;
         const auto s1=webplaysynth::dsp::oscillatorSample(oldPhase,increment1,p.osc1Wave,
-            juce::jlimit(0.05f,0.95f,p.osc1PulseWidth+static_cast<float>(lfo)*p.lfoPulseDepth));
+            webplaysynth::dsp::modulatePulseWidth(p.osc1PulseWidth,lfo,p.lfoPulseDepth));
         phase1[static_cast<size_t>(layer)]+=increment1;
         if(phase1[static_cast<size_t>(layer)]>=1) phase1[static_cast<size_t>(layer)]-=std::floor(phase1[static_cast<size_t>(layer)]);
         const auto phase2Increment = p.hardSync
@@ -183,7 +185,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
         const auto oscillatorMix=s1*p.osc1Level*(p.vco1Enabled?1.0f:0.0f)
             +s2*p.osc2Level*(p.vco2Enabled?1.0f:0.0f);
         if (p.lfoPanDepth > 0.0f) {
-            const auto pan=juce::jlimit(-1.0f,1.0f,p.unisonPanPositions[static_cast<size_t>(layer)]+static_cast<float>(lfo*p.lfoPanDepth));
+            const auto pan=webplaysynth::dsp::modulatePan(p.unisonPanPositions[static_cast<size_t>(layer)],lfo,p.lfoPanDepth);
             const auto angle=(pan+1.0f)*juce::MathConstants<float>::pi*0.25f;
             const auto panScale=juce::MathConstants<float>::sqrt2;
             mixLeft+=oscillatorMix*std::cos(angle)*panScale*p.unisonLayerGain;
@@ -210,7 +212,8 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     // filter controls must not jump discontinuously between audio blocks.
     currentCutoff += (p.cutoff - currentCutoff) * filterSmoothingCoefficient;
     currentResonance += (p.resonance - currentResonance) * filterSmoothingCoefficient;
-    const auto cutoff=juce::jlimit(30.0f,19000.0f,currentCutoff*static_cast<float>(std::pow(2.0,p.filterContour*env*3.0))+lfo*p.lfoFilterDepth);
+    const auto cutoff=webplaysynth::dsp::modulateFilterCutoff(
+        currentCutoff,env,p.filterContour,lfo,p.lfoFilterDepth);
     const auto drivenLeft = p.filterDrive > 0.0f ? std::tanh(mixLeft * p.filterDriveGain) : mixLeft;
     const auto drivenRight = p.filterDrive > 0.0f ? std::tanh(mixRight * p.filterDriveGain) : mixRight;
     if (std::abs(currentResonance - appliedResonance) >= 0.01f) {
@@ -220,7 +223,7 @@ void WebPlaySynthAudioProcessor::Voice::render(const Parameters& p,double sr,flo
     }
     for (auto& filter : filters)
         filter.setCutoffFrequency(cutoff);
-    const auto ampLfo=(1.0f+static_cast<float>(lfo)*p.lfoAmpDepth)/(1.0f+p.lfoAmpDepth);
+    const auto ampLfo=webplaysynth::dsp::modulateAmplitude(lfo,p.lfoAmpDepth);
     const auto pressureGain=1.0f+juce::jlimit(0.0f,1.0f,aftertouch)*p.aftertouchDepth;
     // JUCE's TPT band-pass output is Q-scaled, unlike Web Audio's
     // normalized BiquadFilterNode band-pass response. Compensate by R2
