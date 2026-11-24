@@ -372,7 +372,7 @@ double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
     return tailSeconds;
 }
 
-void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int block)
+void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
 {
     currentSampleRate=sr; lastPlayedFrequency=0;
     for(auto& v:voices) v.prepare(sr);
