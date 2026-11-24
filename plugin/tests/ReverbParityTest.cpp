@@ -73,6 +73,18 @@ void compare(double rate, bool stereo)
              <<", rms="<<std::sqrt(squares/samples)<<", max="<<maxError<<'\n';
     require(maxError<=tolerance,"portable reverb must match JUCE 8.0.6 within 2e-6");
 }
+void unpreparedProcessingIsSafe()
+{
+    webplaysynth::dsp::StereoReverb candidate;
+    std::array<float, 8> left{1.0f, -0.5f, 0.25f, 0.0f, 0.1f, 0.2f, 0.3f, 0.4f};
+    std::array<float, 8> right{-1.0f, 0.5f, -0.25f, 0.0f, -0.1f, -0.2f, -0.3f, -0.4f};
+    const auto originalLeft = left;
+    const auto originalRight = right;
+    candidate.processStereo(left.data(), right.data(), static_cast<int>(left.size()));
+    candidate.processMono(left.data(), static_cast<int>(left.size()));
+    require(left == originalLeft && right == originalRight,
+        "processing before prepare must safely leave input unchanged");
+}
 void resetClearsTail()
 {
     webplaysynth::dsp::StereoReverb candidate;
@@ -87,6 +99,7 @@ void resetClearsTail()
 }
 int main()
 {
+    unpreparedProcessingIsSafe();
     resetClearsTail();
     for(const auto rate:{44100.0,48000.0,96000.0}) { compare(rate,false); compare(rate,true); }
     std::cout<<"PASS: portable reverb matches JUCE across rates, layouts, automation, and reset\n";
