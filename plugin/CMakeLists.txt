@@ -31,6 +31,15 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthOscillatorPrimitivesTest PRIVATE cxx_std_17)
     add_test(NAME native-portable-oscillator-primitives COMMAND WebPlaySynthOscillatorPrimitivesTest)
 
+    add_executable(WebPlaySynthTptFilterParityTest tests/TptFilterParityTest.cpp)
+    target_include_directories(WebPlaySynthTptFilterParityTest PRIVATE
+        Source
+        "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
+    )
+    target_compile_features(WebPlaySynthTptFilterParityTest PRIVATE cxx_std_17)
+    target_link_libraries(WebPlaySynthTptFilterParityTest PRIVATE juce::juce_dsp)
+    add_test(NAME native-tpt-filter-primitive-parity COMMAND WebPlaySynthTptFilterParityTest)
+
     add_executable(WebPlaySynthDspPrimitiveParityTest tests/DspPrimitiveParityTest.cpp)
     target_include_directories(WebPlaySynthDspPrimitiveParityTest PRIVATE
         Source
