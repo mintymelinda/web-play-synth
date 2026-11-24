@@ -71,7 +71,7 @@ private:
             return;
 
         r2 = 1.0f / resonance;
-        g = std::tan(3.14159265358979323846f * cutoff / static_cast<float>(sampleRate));
+        g = std::tan(3.14159265358979323846f * cutoff / sampleRate);
         h = 1.0f / (1.0f + r2 * g + g * g);
     }
 
