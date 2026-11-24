@@ -1,6 +1,6 @@
 #include "Dsp/TptFilter.h"
 
-#include <JuceHeader.h>
+#include <juce_dsp/juce_dsp.h>
 
 #include <algorithm>
 #include <cmath>
