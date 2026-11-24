@@ -21,8 +21,15 @@ juce_generate_juce_header(WebPlaySynth)
 target_sources(WebPlaySynth PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
 target_compile_features(WebPlaySynth PRIVATE cxx_std_17)
 target_compile_definitions(WebPlaySynth PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
-    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+if(BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Keep LTO out of the sanitizer diagnostic build: GCC's LTO plugin can
+    # emit unresolved ASan initialization symbols for JUCE's generated formats.
+    target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+else()
+    target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)
