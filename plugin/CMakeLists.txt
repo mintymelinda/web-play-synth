@@ -41,6 +41,7 @@ if(BUILD_TESTING)
     add_executable(WebPlaySynthReverbParityTest tests/ReverbParityTest.cpp)
     target_include_directories(WebPlaySynthReverbParityTest PRIVATE Source)
     target_compile_features(WebPlaySynthReverbParityTest PRIVATE cxx_std_17)
+    target_compile_definitions(WebPlaySynthReverbParityTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
     target_link_libraries(WebPlaySynthReverbParityTest PRIVATE
         juce::juce_audio_basics
         juce::juce_recommended_config_flags
