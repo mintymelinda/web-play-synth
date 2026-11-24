@@ -86,6 +86,7 @@ if(BUILD_TESTING)
         "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
     )
     target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
+    target_compile_definitions(WebPlaySynthSmokeTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_sources(WebPlaySynthSmokeTest PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp)
     target_link_libraries(WebPlaySynthSmokeTest PRIVATE juce::juce_audio_utils juce::juce_dsp)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
