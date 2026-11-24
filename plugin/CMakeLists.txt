@@ -21,8 +21,15 @@ juce_generate_juce_header(WebPlaySynth)
 target_sources(WebPlaySynth PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
 target_compile_features(WebPlaySynth PRIVATE cxx_std_17)
 target_compile_definitions(WebPlaySynth PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
-    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+if(BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Keep LTO out of the sanitizer diagnostic build: GCC's LTO plugin can
+    # emit unresolved ASan initialization symbols for JUCE's generated formats.
+    target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+else()
+    target_link_libraries(WebPlaySynth PRIVATE juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)
@@ -38,6 +45,16 @@ if(BUILD_TESTING)
     target_include_directories(WebPlaySynthDelayParityTest PRIVATE Source)
     target_compile_features(WebPlaySynthDelayParityTest PRIVATE cxx_std_17)
     add_test(NAME native-portable-delay-parity COMMAND WebPlaySynthDelayParityTest)
+    add_executable(WebPlaySynthReverbParityTest tests/ReverbParityTest.cpp)
+    target_include_directories(WebPlaySynthReverbParityTest PRIVATE Source)
+    target_compile_features(WebPlaySynthReverbParityTest PRIVATE cxx_std_17)
+    target_compile_definitions(WebPlaySynthReverbParityTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(WebPlaySynthReverbParityTest PRIVATE
+        juce::juce_audio_basics
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+    )
+    add_test(NAME native-portable-reverb-parity COMMAND WebPlaySynthReverbParityTest)
     add_executable(WebPlaySynthChorusParityTest tests/ChorusParityTest.cpp)
     target_include_directories(WebPlaySynthChorusParityTest PRIVATE Source)
     target_compile_features(WebPlaySynthChorusParityTest PRIVATE cxx_std_17)
@@ -69,8 +86,19 @@ if(BUILD_TESTING)
         "${CMAKE_CURRENT_BINARY_DIR}/WebPlaySynth_artefacts/JuceLibraryCode"
     )
     target_compile_features(WebPlaySynthSmokeTest PRIVATE cxx_std_17)
-    target_link_libraries(WebPlaySynthSmokeTest PRIVATE WebPlaySynth juce::juce_audio_utils)
+    target_compile_definitions(WebPlaySynthSmokeTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JucePlugin_Name="Web Play Synth")
+    target_sources(WebPlaySynthSmokeTest PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp)
+    target_link_libraries(WebPlaySynthSmokeTest PRIVATE juce::juce_audio_utils juce::juce_dsp)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # Build an ASan-instrumented copy of the processor only for this test.
+        # Do not instrument the plugin shared-code archive: JUCE loads generated
+        # VST3/Standalone targets in helper processes that cannot guarantee the
+        # ASan runtime is first in their initial library list.
+        target_compile_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g -fno-inline)
+        target_link_options(WebPlaySynthSmokeTest PRIVATE -fsanitize=address)
+        set_tests_properties(native-synth-smoke PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1")
+    endif()
 
     add_executable(WebPlaySynthAudioPathTest tests/AudioPathRegressionTest.cpp)
     target_include_directories(WebPlaySynthAudioPathTest PRIVATE

@@ -5,6 +5,7 @@
 #include "Dsp/TptFilter.h"
 #include "Dsp/Delay.h"
 #include "Dsp/Chorus.h"
+#include "Dsp/Reverb.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -104,7 +105,7 @@ private:
     std::array<float, 16> channelAftertouch {};
     std::array<bool, 16> sustainPedalDown {};
     std::array<Voice,16> voices;
-    juce::Reverb reverb;
+    webplaysynth::dsp::StereoReverb reverb;
     webplaysynth::dsp::StereoChorus chorus;
     webplaysynth::dsp::StereoDelay delay;
     double currentSampleRate=44100, lastPlayedFrequency=0;

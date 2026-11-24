@@ -384,16 +384,14 @@ void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
     // Set the parameter targets before setSampleRate() resets JUCE's smoothers,
     // so the first dry block starts at unity instead of ramping from JUCE's
     // constructor default gain.
-    juce::Reverb::Parameters initialReverbParameters;
+    webplaysynth::dsp::StereoReverb::Parameters initialReverbParameters;
     initialReverbParameters.roomSize=parameters.getRawParameterValue("reverbRoom")->load();
     initialReverbParameters.damping=parameters.getRawParameterValue("reverbDamping")->load();
     initialReverbParameters.wetLevel=parameters.getRawParameterValue("reverbMix")->load();
     initialReverbParameters.dryLevel=0.5f*(1.0f-initialReverbParameters.wetLevel);
     initialReverbParameters.width=1.0f;
     initialReverbParameters.freezeMode=0.0f;
-    reverb.setParameters(initialReverbParameters);
-    reverb.setSampleRate(sr);
-    reverb.reset();
+    reverb.prepare(sr, initialReverbParameters);
     chorus.prepare(sr);
     delay.prepare(sr);
 }
@@ -514,11 +512,11 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
             channelCount, sampleCount, p.delayTime, p.delayFeedback, p.delayMix);
     }
 
-    juce::Reverb::Parameters reverbParameters;
+    webplaysynth::dsp::StereoReverb::Parameters reverbParameters;
     reverbParameters.roomSize=p.reverbRoom;
     reverbParameters.damping=p.reverbDamping;
     reverbParameters.wetLevel=p.reverbMix;
-    // JUCE scales dryLevel by 2 internally, so 0.5 represents unity gain.
+    // Preserve JUCE's internal 2x dry-level scaling.
     reverbParameters.dryLevel=0.5f*(1.0f-p.reverbMix);
     reverbParameters.width=1.0f;
     reverbParameters.freezeMode=0.0f;
