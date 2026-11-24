@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include "Dsp/Envelope.h"
 #include "Dsp/Lfo.h"
+#include "Dsp/TptFilter.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -70,7 +71,7 @@ private:
         std::array<float,4> unisonRightGains {1.0f,1.0f,1.0f,1.0f};
     };
     struct Voice {
-        std::array<juce::dsp::StateVariableTPTFilter<float>, 2> filters;
+        std::array<webplaysynth::dsp::TptFilter, 2> filters;
         webplaysynth::dsp::Adsr ampEnvelope, filterEnvelope;
         bool active=false, keyDown=false, sustainHeld=false;
         int note=-1, midiChannel=1, age=0;
