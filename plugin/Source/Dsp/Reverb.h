@@ -7,8 +7,8 @@
 
 namespace webplaysynth::dsp {
 
-// JUCE 8.0.6 Reverb-compatible FreeVerb network. prepare() allocates storage;
-// parameter updates and audio processing do not allocate.
+// JUCE 8.0.6 Reverb-compatible FreeVerb network. Call prepare() before use;
+// it allocates delay storage, while parameter updates and processing allocate nothing.
 class StereoReverb {
 public:
     struct Parameters {
