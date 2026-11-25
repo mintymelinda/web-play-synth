@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Dsp/Envelope.h"
-#include "Dsp/Lfo.h"
-#include "Dsp/Modulation.h"
-#include "Dsp/Oscillator.h"
-#include "Dsp/TptFilter.h"
+#include "../Dsp/Envelope.h"
+#include "../Dsp/Lfo.h"
+#include "../Dsp/Modulation.h"
+#include "../Dsp/Oscillator.h"
+#include "../Dsp/TptFilter.h"
 
 #include <array>
 #include <cmath>
