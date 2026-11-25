@@ -340,30 +340,4 @@ void PolySynthEngine::release() noexcept
     specification = {};
 }
 
-
-std::uint32_t PolySynthEngine::activeVoiceCount() const noexcept
-{
-    std::uint32_t count = 0;
-    for (const auto& voice : voices)
-        if (voice.active)
-            ++count;
-    return count;
-}
-
-bool PolySynthEngine::isVoiceSustainHeld(std::uint32_t index) const noexcept
-{
-    return index < voices.size() && voices[index].sustainHeld;
-}
-
-bool PolySynthEngine::isVoiceAmpEnvelopeActive(std::uint32_t index) const noexcept
-{
-    return index < voices.size() && voices[index].ampEnvelope.isActive();
-}
-
-bool PolySynthEngine::isSustainPedalDown(std::uint32_t channel) const noexcept
-{
-    return channel > 0 && channel <= sustainPedalDown.size()
-        && sustainPedalDown[channel - 1];
-}
-
 } // namespace webplaysynth::engine
