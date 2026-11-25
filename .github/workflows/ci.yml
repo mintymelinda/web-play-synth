@@ -10,6 +10,29 @@ permissions:
   contents: read
 
 jobs:
+  portable-engine-wasm:
+    name: Portable engine (native contract + WebAssembly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and test the C ABI natively
+        run: |
+          cmake -S wasm -B build/wasm-native -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build/wasm-native --parallel
+          ctest --test-dir build/wasm-native --output-on-failure
+
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+
+      - name: Compile standalone WebAssembly module
+        run: |
+          emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build/wasm --parallel
+          test -s build/wasm/webplaysynth_engine.wasm
+
   build:
     runs-on: ubuntu-latest
     steps:
