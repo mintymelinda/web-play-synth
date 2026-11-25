@@ -171,4 +171,74 @@ enum class EngineStatus : std::uint8_t {
     incompatibleParameters
 };
 
+
+
+// A modulation block is planar: each source points to frameCount floats.
+// Source ordering is defined by the engine/host integration contract, not by
+// this transport type. A zero-source view is valid and represents no external
+// modulation. The engine must not retain any source pointer after process().
+struct ModulationInputView {
+    const float* const* sources = nullptr;
+    std::uint32_t sourceCount = 0;
+    std::uint32_t frameCount = 0;
+
+    bool isValid(std::uint32_t expectedFrames) const noexcept
+    {
+        if (frameCount != expectedFrames)
+            return false;
+        if (sourceCount == 0)
+            return true;
+        if (sources == nullptr)
+            return false;
+        for (std::uint32_t source = 0; source < sourceCount; ++source) {
+            if (sources[source] == nullptr)
+                return false;
+        }
+        return true;
+    }
+};
+
+struct EngineProcessBlock {
+    ConstAudioBlockView input;
+    AudioBlockView output;
+    EngineEventView events;
+    ParameterSnapshotView parameters;
+    ModulationInputView modulation;
+
+    bool isValid(const ProcessSpec& spec) const noexcept
+    {
+        if (!spec.isValid())
+            return false;
+        if (!output.isValid() || output.channelCount != spec.outputChannels)
+            return false;
+        if (spec.inputChannels == 0) {
+            if (input.channelCount != 0 || input.frameCount != 0)
+                return false;
+        } else if (!input.isValid() || input.channelCount != spec.inputChannels
+                   || input.frameCount != output.frameCount) {
+            return false;
+        }
+        if (output.frameCount > spec.maximumFramesPerBlock)
+            return false;
+        if (!events.isValid(output.frameCount) || !parameters.isValid())
+            return false;
+        return modulation.isValid(output.frameCount);
+    }
+};
+
+// Stable host-independent lifecycle and block-processing contract. prepare()
+// may allocate and must only be called outside the real-time callback. process()
+// and reset() must not allocate, block, perform I/O, or retain any view pointer.
+// Implementations consume events in array order and split rendering at each
+// event frame offset so event timing is sample-accurate. release() is idempotent.
+class ISynthEngine {
+public:
+    virtual ~ISynthEngine() = default;
+    virtual EngineStatus prepare(const ProcessSpec& spec) = 0;
+    virtual EngineStatus process(const EngineProcessBlock& block) noexcept = 0;
+    virtual void reset(ResetMode mode) noexcept = 0;
+    virtual void release() noexcept = 0;
+    virtual bool isPrepared() const noexcept = 0;
+};
+
 } // namespace webplaysynth::engine

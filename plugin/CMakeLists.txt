@@ -43,6 +43,11 @@ if(BUILD_TESTING)
     target_compile_features(WebPlaySynthEngineApiTest PRIVATE cxx_std_17)
     add_test(NAME native-shared-engine-api COMMAND WebPlaySynthEngineApiTest)
 
+    add_executable(WebPlaySynthEngineContractTest tests/EngineContractTest.cpp)
+    target_include_directories(WebPlaySynthEngineContractTest PRIVATE Source)
+    target_compile_features(WebPlaySynthEngineContractTest PRIVATE cxx_std_17)
+    add_test(NAME native-shared-engine-contract COMMAND WebPlaySynthEngineContractTest)
+
     add_executable(WebPlaySynthOscillatorPrimitivesTest tests/OscillatorPrimitivesTest.cpp)
     target_include_directories(WebPlaySynthOscillatorPrimitivesTest PRIVATE Source)
     target_compile_features(WebPlaySynthOscillatorPrimitivesTest PRIVATE cxx_std_17)
