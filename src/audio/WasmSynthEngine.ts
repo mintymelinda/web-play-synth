@@ -36,9 +36,12 @@ export class WasmSynthEngine {
       this.context=context;
       const resumed=context.resume();
       try{
+        const wasmResponse=await fetch("/webplaysynth_engine.wasm");
+        if(!wasmResponse.ok)throw new Error("Unable to fetch WebAssembly synth module: HTTP "+wasmResponse.status);
+        const wasmBytes=await wasmResponse.arrayBuffer();
         await context.audioWorklet.addModule("/synth-worklet.js");
         const node=new AudioWorkletNode(context,"web-play-synth",{
-          numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:"explicit",
+          numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:"explicit",processorOptions:{wasmBytes},
         });
         this.node=node; node.connect(context.destination);
         await new Promise<void>((resolve,reject)=>{

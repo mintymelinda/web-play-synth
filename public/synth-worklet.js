@@ -12,12 +12,12 @@ class WebPlaySynthProcessor extends AudioWorkletProcessor{
     this.eventTypes=new Uint32Array(EVENT_CAPACITY);this.eventNotes=new Uint32Array(EVENT_CAPACITY);
     this.eventChannels=new Uint32Array(EVENT_CAPACITY);this.eventValues=new Float32Array(EVENT_CAPACITY);
     this.eventCount=0;this.port.onmessage=e=>this.handleMessage(e.data);
-    this.initialize(options.processorOptions?.wasmUrl??"/webplaysynth_engine.wasm");
+    this.initialize(options.processorOptions?.wasmBytes);
   }
-  async initialize(url){
+  async initialize(wasmBytes){
     try{
-      const response=await fetch(url);if(!response.ok)throw new Error("Unable to fetch WebAssembly synth module: HTTP "+response.status);
-      const module=await WebAssembly.compile(await response.arrayBuffer()),imports={};
+      if(!(wasmBytes instanceof ArrayBuffer))throw new Error("The browser host did not provide the WebAssembly module bytes");
+      const module=await WebAssembly.compile(wasmBytes),imports={};
       for(const entry of WebAssembly.Module.imports(module)){
         const group=imports[entry.module]??(imports[entry.module]={});
         if(entry.kind==="memory")group[entry.name]=new WebAssembly.Memory({initial:256,maximum:256});
