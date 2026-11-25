@@ -40,6 +40,24 @@ float rms(const std::array<float, 256>& left, const std::array<float, 256>& righ
 }
 }
 
+class ArrayEventSource final : public webplaysynth::engine::IEngineEventSource {
+public:
+    ArrayEventSource(const webplaysynth::engine::EngineEvent* values,
+                     std::uint32_t size) noexcept : events(values), count(size) {}
+    void rewind() noexcept override { position = 0; }
+    bool next(webplaysynth::engine::EngineEvent& event) noexcept override
+    {
+        if (position >= count)
+            return false;
+        event = events[position++];
+        return true;
+    }
+private:
+    const webplaysynth::engine::EngineEvent* events;
+    std::uint32_t count;
+    std::uint32_t position = 0;
+};
+
 int main()
 {
     using namespace webplaysynth::engine;
@@ -91,6 +109,16 @@ int main()
     block.events = {nullptr, 0};
     require(engine.process(block) == EngineStatus::ok && rms(left, right) == 0.0f,
         "reprepare retires voices from the previous configuration");
+
+    engine.reset(ResetMode::voices);
+    const EngineEvent blockBoundaryNote{EngineEventType::noteOn, 256, 1, 64, 0.8f};
+    ArrayEventSource streamedBoundaryEvent(&blockBoundaryNote, 1);
+    block.events = {nullptr, 1, &streamedBoundaryEvent};
+    require(engine.process(block) == EngineStatus::ok && rms(left, right) == 0.0f,
+        "streamed event at block end is applied after the final sample");
+    block.events = {nullptr, 0};
+    require(engine.process(block) == EngineStatus::ok && rms(left, right) > 0.00001f,
+        "block-end streamed note starts rendering in the following block");
 
     const EngineEvent unordered[] = {
         {EngineEventType::noteOn, 10, 1, 60, 0.8f},
