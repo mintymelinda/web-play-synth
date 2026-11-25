@@ -1,7 +1,7 @@
 import type { SynthSettings } from "./SynthEngine";
 export type { Envelope, SynthSettings, Waveform } from "./SynthEngine";
 
-declare global { interface Window { __WPS_ENGINE_BACKEND__?: string; } }
+declare global { interface Window { __WPS_ENGINE_BACKEND__?: string; __WPS_ENGINE_ERROR__?: string; } }
 type ActiveVoice = { midiNote: number; channel: number; velocity: number };
 const waveformIndex: Record<string, number> = { sine: 0, triangle: 1, sawtooth: 2, square: 3 };
 
@@ -50,6 +50,7 @@ export class WasmSynthEngine {
         });
         await resumed;
       }catch(error){
+        window.__WPS_ENGINE_ERROR__=error instanceof Error?error.message:String(error);
         this.node?.disconnect(); this.node=null; this.context=null;
         await context.close().catch(()=>undefined);
         throw error;

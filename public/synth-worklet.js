@@ -45,7 +45,7 @@ class WebPlaySynthProcessor extends AudioWorkletProcessor{
       this.dataView=new DataView(this.memory.buffer);this.leftView=new Float32Array(this.memory.buffer,this.leftPointer,MAX_FRAMES);
       this.rightView=new Float32Array(this.memory.buffer,this.rightPointer,MAX_FRAMES);
       this.ready=true;this.port.postMessage({type:"ready"});
-    }catch(error){this.port.postMessage({type:"error",message:error instanceof Error?error.message:String(error)});}
+    }catch(error){const message=error instanceof Error?error.message:String(error);this.port.postMessage({type:"error",message});}
   }
   handleMessage(message){
     if(!message)return;

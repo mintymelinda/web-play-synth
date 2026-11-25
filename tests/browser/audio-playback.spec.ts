@@ -21,7 +21,12 @@ test("the browser synth produces audio while a key is held and releases to silen
 
   await page.goto("/");
   await page.getByRole("button", { name: "POWER ON" }).click();
-  await expect.poll(() => page.evaluate(() => (window as Window & { __WPS_ENGINE_BACKEND__?: string }).__WPS_ENGINE_BACKEND__)).toBe("wasm");
+  await page.waitForFunction(() => {
+    const state = window as Window & { __WPS_ENGINE_BACKEND__?: string; __WPS_ENGINE_ERROR__?: string };
+    return state.__WPS_ENGINE_BACKEND__ === "wasm" || Boolean(state.__WPS_ENGINE_ERROR__);
+  }, undefined, { timeout: 10000 });
+  const engineError = await page.evaluate(() => (window as Window & { __WPS_ENGINE_ERROR__?: string }).__WPS_ENGINE_ERROR__);
+  expect(engineError, `WASM engine initialization failed: ${engineError ?? "unknown error"}`).toBeUndefined();
 
   const firstKey = page.locator(".piano .white-key").first();
   await firstKey.hover();
