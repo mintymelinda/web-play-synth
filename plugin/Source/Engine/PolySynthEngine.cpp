@@ -112,6 +112,7 @@ EngineStatus PolySynthEngine::prepare(const ProcessSpec& spec)
 {
     if (!spec.isValid())
         return EngineStatus::invalidSpecification;
+    reset(ResetMode::voices);
     specification = spec;
     for (auto& voice : voices)
         voice.prepare(spec.sampleRateHz);
@@ -223,7 +224,10 @@ void PolySynthEngine::handleEvent(const EngineEvent& event,
     const auto channelIndex = static_cast<std::size_t>(channel - 1);
     switch (event.type) {
         case EngineEventType::noteOn:
-            startNote(event, parameters);
+            if (event.value <= 0.0f)
+                stopNote(event.note, channel);
+            else
+                startNote(event, parameters);
             break;
         case EngineEventType::noteOff:
             stopNote(event.note, channel);
