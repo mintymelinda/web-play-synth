@@ -62,7 +62,7 @@ jobs:
           if [[ "${{ matrix.platform }}" == "macos-universal" ]]; then
             cmake_args+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64")
           fi
-          cmake "\${cmake_args[@]}"
+          cmake "${cmake_args[@]}"
 
       - name: Build VST3 and Standalone
         run: cmake --build build/plugin --config Release --parallel
@@ -173,7 +173,7 @@ jobs:
           ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
         run: |
           for name in CERTIFICATE CERTIFICATE_PASSWORD API_KEY API_KEY_ID ISSUER_ID; do
-            if [[ -z "\${!name}" ]]; then
+            if [[ -z "${!name}" ]]; then
               echo "::error::Missing required GitHub secret/variable for macOS signing: $name"
               exit 1
             fi
