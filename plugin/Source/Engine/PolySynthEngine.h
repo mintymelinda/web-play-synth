@@ -1,5 +1,7 @@
 #pragma once
 
+struct WebPlaySynthAudioProcessorTestAccess;
+
 #include "EngineApi.h"
 #include "VoiceEngine.h"
 
@@ -35,13 +37,8 @@ public:
     void release() noexcept override;
     bool isPrepared() const noexcept override { return prepared; }
 
-    // Read-only diagnostics used by deterministic processor regression tests.
-    std::uint32_t activeVoiceCount() const noexcept;
-    bool isVoiceSustainHeld(std::uint32_t index) const noexcept;
-    bool isVoiceAmpEnvelopeActive(std::uint32_t index) const noexcept;
-    bool isSustainPedalDown(std::uint32_t channel) const noexcept;
-
 private:
+    friend struct ::WebPlaySynthAudioProcessorTestAccess;
     static bool decodeParameters(const ParameterSnapshotView& snapshot,
                                  double sampleRate, SynthParameters& result) noexcept;
     void renderRange(const AudioBlockView& output, std::uint32_t start,
