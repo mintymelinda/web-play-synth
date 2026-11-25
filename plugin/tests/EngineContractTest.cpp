@@ -15,7 +15,6 @@ void require(bool condition, const char* message)
 
 class ContractProbe final : public webplaysynth::engine::ISynthEngine {
 public:
-    using namespace_placeholder = int;
     webplaysynth::engine::EngineStatus prepare(
         const webplaysynth::engine::ProcessSpec& value) override
     {
@@ -31,15 +30,9 @@ public:
     {
         if (!prepared)
             return webplaysynth::engine::EngineStatus::notPrepared;
-        if (!block.output.isValid())
-            return webplaysynth::engine::EngineStatus::invalidAudioBlock;
-        if (block.output.frameCount > spec.maximumFramesPerBlock)
-            return webplaysynth::engine::EngineStatus::unsupportedBlockSize;
-        if (!block.events.isValid(block.output.frameCount))
-            return webplaysynth::engine::EngineStatus::invalidEvents;
-        if (!block.parameters.isValid())
-            return webplaysynth::engine::EngineStatus::incompatibleParameters;
-        return webplaysynth::engine::EngineStatus::ok;
+        return block.isValid(spec)
+            ? webplaysynth::engine::EngineStatus::ok
+            : webplaysynth::engine::EngineStatus::invalidAudioBlock;
     }
 
     void reset(webplaysynth::engine::ResetMode mode) noexcept override
@@ -73,6 +66,7 @@ int main()
     }};
 
     EngineProcessBlock block{
+        {nullptr, 0, 0},
         {outputChannels.data(), 2, 16},
         {events.data(), static_cast<std::uint32_t>(events.size())},
         {parameterValues.data(), static_cast<std::uint32_t>(parameterValues.size()),
@@ -82,6 +76,11 @@ int main()
 
     require(block.isValid(spec),
         "valid planar output, ordered events, parameters, and modulation must be accepted");
+
+    auto unexpectedInput = block;
+    unexpectedInput.input = {inputChannels.data(), 1, 16};
+    require(!unexpectedInput.isValid(spec),
+        "input channels must be absent when the prepared specification has no input bus");
 
     auto invalidModulation = block;
     invalidModulation.modulation.frameCount = 15;
