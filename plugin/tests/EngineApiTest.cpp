@@ -16,6 +16,24 @@ void require(bool condition, const char* message)
 }
 }
 
+class ArrayEventSource final : public webplaysynth::engine::IEngineEventSource {
+public:
+    ArrayEventSource(const webplaysynth::engine::EngineEvent* values,
+                     std::uint32_t size) noexcept : events(values), count(size) {}
+    void rewind() noexcept override { position = 0; }
+    bool next(webplaysynth::engine::EngineEvent& event) noexcept override
+    {
+        if (position >= count)
+            return false;
+        event = events[position++];
+        return true;
+    }
+private:
+    const webplaysynth::engine::EngineEvent* events;
+    std::uint32_t count;
+    std::uint32_t position = 0;
+};
+
 int main()
 {
     using namespace webplaysynth::engine;
@@ -77,6 +95,11 @@ int main()
     }};
     require(EngineEventView{orderedEvents.data(), 3}.isValid(8),
         "valid ordered event view must be accepted");
+    ArrayEventSource streamedEvents(orderedEvents.data(), 3);
+    require(EngineEventView{nullptr, 3, &streamedEvents}.isValid(8),
+        "streamed event source must validate without a contiguous event array");
+    require(EngineEventView{nullptr, 3, &streamedEvents}.isValid(8),
+        "streamed event source validation must rewind deterministically");
     require(EngineEventView{nullptr, 1}.isValid(8) == false,
         "non-empty event view with null storage must be rejected");
     require(EngineEventView{orderedEvents.data(), 3}.isValid(0) == false,
