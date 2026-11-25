@@ -278,8 +278,8 @@ void testAmpEnvelopeMatchesJuceAdsr()
     constexpr int noteOffSample = 240;
     constexpr int blockCount = 6;
 
-    const auto configure = [](bool enabled) {
-        return [enabled](WebPlaySynthAudioProcessor& processor) {
+    const auto configure = [attack, decay, sustain, release](bool enabled) {
+        return [enabled, attack, decay, sustain, release](WebPlaySynthAudioProcessor& processor) {
             configureCommon(processor);
             setParameter(processor, "ampEnvEnabled", enabled ? 1.0f : 0.0f);
             setParameter(processor, "ampAttack", attack);
@@ -611,7 +611,7 @@ void testLfoAmplitudeMatchesRenderedReference()
         configureCommon(processor);
     }, blockCount);
 
-    const auto modulated = render([](WebPlaySynthAudioProcessor& processor) {
+    const auto modulated = render([depth](WebPlaySynthAudioProcessor& processor) {
         configureCommon(processor);
         setParameter(processor, "lfoAmpDepth", depth);
     }, blockCount);
