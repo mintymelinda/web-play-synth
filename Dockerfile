@@ -2,7 +2,6 @@ FROM emscripten/emsdk:3.1.74 AS wasm-build
 WORKDIR /app
 COPY plugin/Source/Engine ./plugin/Source/Engine
 COPY plugin/Source/Dsp ./plugin/Source/Dsp
-COPY plugin/Source/Dsp ./plugin/Source/Dsp
 COPY wasm ./wasm
 RUN emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build/wasm --parallel
