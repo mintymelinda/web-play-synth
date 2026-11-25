@@ -66,6 +66,11 @@ if [[ ! -s "$STAGE_DIR/index.html" ]]; then
     exit 1
 fi
 
+if [[ ! -s "$STAGE_DIR/legacy/index.html" ]]; then
+    echo "Build did not produce the preserved dist/legacy/index.html entry point" >&2
+    exit 1
+fi
+
 # Verify that every asset referenced directly by index.html exists before
 # publishing anything. Vite emits content-hashed paths under /assets/.
 while IFS= read -r asset; do
@@ -90,6 +95,11 @@ for attempt in {1..15}; do
 done
 if [[ "$healthy" -ne 1 ]]; then
     echo "Staged release failed its Nginx HTTP smoke test" >&2
+    exit 1
+fi
+
+if ! docker exec "$PROBE_CONTAINER" wget -q -O - http://127.0.0.1/legacy/ | grep -q "WEB PLAY SYNTH"; then
+    echo "Staged release did not serve the legacy browser synth at /legacy/" >&2
     exit 1
 fi
 
