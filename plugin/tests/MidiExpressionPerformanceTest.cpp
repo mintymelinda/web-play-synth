@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 
+#include <algorithm>
+
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -9,22 +11,22 @@ struct WebPlaySynthAudioProcessorTestAccess
 {
     static int activeVoiceCount(const WebPlaySynthAudioProcessor& processor)
     {
-        return static_cast<int>(processor.engine.activeVoiceCount());
+        return static_cast<int>(static_cast<std::uint32_t>(std::count_if(processor.engine.voices.begin(), processor.engine.voices.end(), [](const auto& voice) { return voice.active; })));
     }
 
     static bool firstVoiceSustainHeld(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.engine.isVoiceSustainHeld(0);
+        return processor.engine.voices[0].sustainHeld;
     }
 
     static bool firstVoiceAmpEnvelopeActive(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.engine.isVoiceAmpEnvelopeActive(0);
+        return processor.engine.voices[0].ampEnvelope.isActive();
     }
 
     static bool sustainPedalDown(const WebPlaySynthAudioProcessor& processor, int channel)
     {
-        return processor.engine.isSustainPedalDown(static_cast<std::uint32_t>(channel));
+        return processor.engine.sustainPedalDown[static_cast<std::size_t>(channel - 1)];
     }
 };
 
