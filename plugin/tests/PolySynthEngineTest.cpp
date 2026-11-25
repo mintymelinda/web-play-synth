@@ -71,10 +71,10 @@ int main()
         require(std::isfinite(left[i]) && std::isfinite(right[i]),
             "rendered samples remain finite");
 
-    const EngineEvent noteOff{EngineEventType::noteOff, 0, 1, 60, 0.0f};
-    block.events = {&noteOff, 1};
+    const EngineEvent velocityZeroNoteOn{EngineEventType::noteOn, 0, 1, 60, 0.0f};
+    block.events = {&velocityZeroNoteOn, 1};
     require(engine.process(block) == EngineStatus::ok,
-        "portable engine accepts note-off and advances release");
+        "zero-velocity note-on follows MIDI note-off semantics");
 
     engine.reset(ResetMode::voices);
     block.events = {nullptr, 0};
@@ -82,6 +82,15 @@ int main()
         "engine continues processing after a voice reset");
     require(rms(left, right) == 0.0f,
         "voice reset leaves the next silent block silent");
+    const EngineEvent restartNote{EngineEventType::noteOn, 0, 1, 60, 0.8f};
+    block.events = {&restartNote, 1};
+    require(engine.process(block) == EngineStatus::ok && rms(left, right) > 0.00001f,
+        "engine can start a fresh voice after reset");
+    require(engine.prepare(spec) == EngineStatus::ok,
+        "reprepare replaces the previous engine lifecycle");
+    block.events = {nullptr, 0};
+    require(engine.process(block) == EngineStatus::ok && rms(left, right) == 0.0f,
+        "reprepare retires voices from the previous configuration");
 
     const EngineEvent unordered[] = {
         {EngineEventType::noteOn, 10, 1, 60, 0.8f},
