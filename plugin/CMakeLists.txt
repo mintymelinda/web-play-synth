@@ -18,7 +18,7 @@ juce_add_plugin(WebPlaySynth
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 juce_generate_juce_header(WebPlaySynth)
-target_sources(WebPlaySynth PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
+target_sources(WebPlaySynth PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h Source/Engine/VoiceEngine.cpp)
 target_compile_features(WebPlaySynth PRIVATE cxx_std_17)
 target_compile_definitions(WebPlaySynth PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 if(BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -33,6 +33,11 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(WebPlaySynthVoiceEngineTest tests/VoiceEngineTest.cpp Source/Engine/VoiceEngine.cpp)
+    target_include_directories(WebPlaySynthVoiceEngineTest PRIVATE Source)
+    target_compile_features(WebPlaySynthVoiceEngineTest PRIVATE cxx_std_17)
+    add_test(NAME native-portable-voice-engine COMMAND WebPlaySynthVoiceEngineTest)
+
     add_executable(WebPlaySynthEngineApiTest tests/EngineApiTest.cpp)
     target_include_directories(WebPlaySynthEngineApiTest PRIVATE Source)
     target_compile_features(WebPlaySynthEngineApiTest PRIVATE cxx_std_17)
