@@ -85,8 +85,9 @@ enum class EngineEventType : std::uint8_t {
 // value is velocity [0, 1] for noteOn, normalized bend [-1, 1] for pitchBend,
 // pressure [0, 1] for pressure events, and pedal state [0, 1] for sustainPedal.
 // channel is MIDI's 1-based channel number. note is used by note and poly
-// pressure events. Event arrays are consumed in supplied order; equal-offset
-// events are never reordered by the engine.
+// pressure events. frameOffset may equal blockFrames: such an event is applied
+// after the final sample, ready for the next block. Events are consumed in
+// supplied order; equal-offset events are never reordered by the engine.
 struct EngineEvent {
     EngineEventType type = EngineEventType::noteOn;
     std::uint32_t frameOffset = 0;
