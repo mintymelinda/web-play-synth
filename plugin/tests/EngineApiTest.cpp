@@ -62,8 +62,10 @@ int main()
         "MIDI channel zero must be rejected");
     require(EngineEvent{EngineEventType::pitchBend, 0, 1, 0, 1.01f}.isValid(8) == false,
         "out-of-range pitch bend must be rejected");
-    require(EngineEvent{EngineEventType::noteOff, 8, 1, 60, 0.0f}.isValid(8) == false,
-        "event at block end must be rejected instead of deferred ambiguously");
+    require(EngineEvent{EngineEventType::noteOff, 8, 1, 60, 0.0f}.isValid(8),
+        "event at block end must be accepted for application before the next block");
+    require(EngineEvent{EngineEventType::noteOff, 9, 1, 60, 0.0f}.isValid(8) == false,
+        "events beyond the block end must be rejected");
     require(EngineEvent{EngineEventType::channelPressure, 0, 1, 0,
         std::numeric_limits<float>::quiet_NaN()}.isValid(8) == false,
         "non-finite event values must be rejected");
