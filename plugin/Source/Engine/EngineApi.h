@@ -171,7 +171,6 @@ enum class EngineStatus : std::uint8_t {
     incompatibleParameters
 };
 
-} // namespace webplaysynth::engine
 
 
 // A modulation block is planar: each source points to frameCount floats.
