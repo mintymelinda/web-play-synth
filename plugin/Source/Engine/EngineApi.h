@@ -96,7 +96,7 @@ struct EngineEvent {
 
     bool isValid(std::uint32_t blockFrames) const noexcept
     {
-        if (frameOffset >= blockFrames || channel == 0 || channel > maximumMidiChannel
+        if (frameOffset > blockFrames || channel == 0 || channel > maximumMidiChannel
             || !std::isfinite(value))
             return false;
 
@@ -121,17 +121,44 @@ struct EngineEvent {
     }
 };
 
+// Optional streaming event source lets host adapters expose large MIDI blocks
+// without allocating or imposing an arbitrary event-count ceiling in the audio
+// callback. rewind() must be deterministic and next() must not allocate.
+class IEngineEventSource {
+public:
+    virtual ~IEngineEventSource() = default;
+    virtual void rewind() noexcept = 0;
+    virtual bool next(EngineEvent& event) noexcept = 0;
+};
+
 struct EngineEventView {
     const EngineEvent* events = nullptr;
     std::uint32_t eventCount = 0;
+    IEngineEventSource* source = nullptr;
 
     bool isValid(std::uint32_t blockFrames) const noexcept
     {
         if (eventCount == 0)
             return true;
-        if (events == nullptr || blockFrames == 0)
+        if (source == nullptr && events == nullptr)
             return false;
+
         std::uint32_t previousOffset = 0;
+        if (source != nullptr) {
+            source->rewind();
+            for (std::uint32_t i = 0; i < eventCount; ++i) {
+                EngineEvent event;
+                if (!source->next(event) || !event.isValid(blockFrames)
+                    || (i > 0 && event.frameOffset < previousOffset)) {
+                    source->rewind();
+                    return false;
+                }
+                previousOffset = event.frameOffset;
+            }
+            source->rewind();
+            return true;
+        }
+
         for (std::uint32_t i = 0; i < eventCount; ++i) {
             if (!events[i].isValid(blockFrames)
                 || (i > 0 && events[i].frameOffset < previousOffset))
