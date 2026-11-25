@@ -1,5 +1,6 @@
 #include "Engine/VoiceEngine.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
