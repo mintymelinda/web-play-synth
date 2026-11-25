@@ -184,3 +184,8 @@
 .glide-amount .knob-label{font-size:7px}
 .glide-amount output{font-size:8px}
 @media(max-width:650px){.glide-panel{grid-template-columns:1fr auto;gap:10px}.glide-info small{font-size:7px}.glide-amount{grid-column:1/-1}.glide-amount .knob-control{grid-template-columns:auto 38px auto;justify-content:start}}
+
+/* Direct access to downloadable native plugin releases */
+.download-link{display:inline-flex;align-items:center;justify-content:center;padding:9px 11px;border:1px solid #456c69;border-radius:4px;background:#172522;color:var(--cyan);font:8px var(--mono);letter-spacing:.8px;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s}
+.download-link:hover{border-color:var(--cyan);background:#203631}
+@media(max-width:650px){.top-actions{gap:7px}.download-link{padding:8px 7px;font-size:7px;letter-spacing:.3px}}
