@@ -61,8 +61,9 @@ docker create --name "$BUILDER_CONTAINER" "$BUILDER_IMAGE" >/dev/null
 mkdir -p "$STAGE_DIR"
 docker cp "$BUILDER_CONTAINER:/app/dist/." "$STAGE_DIR/"
 
-if [[ ! -s "$STAGE_DIR/index.html" ]]; then
-    echo "Build did not produce a non-empty dist/index.html" >&2
+if [[ ! -s "$STAGE_DIR/index.html" || ! -s "$STAGE_DIR/legacy/index.html" \
+      || ! -s "$STAGE_DIR/webplaysynth_engine.wasm" || ! -s "$STAGE_DIR/synth-worklet.js" ]]; then
+    echo "Build is missing the main app, preserved /legacy app, WASM engine, or AudioWorklet." >&2
     exit 1
 fi
 
@@ -82,7 +83,8 @@ docker run --detach --rm --name "$PROBE_CONTAINER" \
     "$NGINX_IMAGE" >/dev/null
 healthy=0
 for attempt in {1..15}; do
-    if docker exec "$PROBE_CONTAINER" wget -q -O /dev/null http://127.0.0.1/; then
+    if docker exec "$PROBE_CONTAINER" sh -ec \
+        'wget -q -O /dev/null http://127.0.0.1/ && wget -q -O /dev/null http://127.0.0.1/legacy/ && wget -q -O /dev/null http://127.0.0.1/webplaysynth_engine.wasm'; then
         healthy=1
         break
     fi

@@ -41,9 +41,29 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+      - name: Build browser WebAssembly engine
+        run: |
+          emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build/wasm --parallel
+          mkdir -p public
+          cp build/wasm/webplaysynth_engine.wasm public/webplaysynth_engine.wasm
       - run: npm run build
       - name: Check deployment scripts
         run: bash -n scripts/deploy.sh scripts/rollback.sh
+      - name: Build and inspect the Docker deployment artifact
+        run: |
+          docker build --target build --tag web-play-synth-builder:ci .
+          container_id="$(docker create web-play-synth-builder:ci)"
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          mkdir -p /tmp/web-play-synth-dist
+          docker cp "$container_id:/app/dist/." /tmp/web-play-synth-dist/
+          test -s /tmp/web-play-synth-dist/index.html
+          test -s /tmp/web-play-synth-dist/legacy/index.html
+          test -s /tmp/web-play-synth-dist/webplaysynth_engine.wasm
+          test -s /tmp/web-play-synth-dist/synth-worklet.js
 
   browser-audio:
     name: Browser audio playback (Chromium)
@@ -54,6 +74,15 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+      - name: Build browser WebAssembly engine
+        run: |
+          emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build/wasm --parallel
+          mkdir -p public
+          cp build/wasm/webplaysynth_engine.wasm public/webplaysynth_engine.wasm
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
       - run: npm run build

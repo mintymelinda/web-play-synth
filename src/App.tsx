@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { AudioLines, Cable, CircleHelp, Power, Volume2 } from "lucide-react";
-import { SynthEngine, type Envelope, type SynthSettings, type Waveform } from "./audio/SynthEngine";
+import { WasmSynthEngine as SynthEngine, type Envelope, type SynthSettings, type Waveform } from "./audio/WasmSynthEngine";
 
 const initial: SynthSettings = {
   oscillator1: { waveform: "sawtooth", octave: 0, tune: 0, level: 0.72 },

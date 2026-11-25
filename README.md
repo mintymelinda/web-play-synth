@@ -98,7 +98,7 @@ Use `windows-x86_64` or `macos-universal` for the corresponding platform build.
 - Interactive keyboard and pointer-playable on-screen keys.
 - Modular routing panel showing audio and modulation connections.
 
-Audio is generated locally using the Web Audio API. Browsers require a user gesture before audio can start.
+The main browser app runs the shared JUCE-independent C++ engine compiled to WebAssembly in an AudioWorklet. The original Web Audio synth remains fully available at `/legacy/`. Browsers require a user gesture before audio can start.
 
 
 ## DAW compatibility and macOS distribution
@@ -120,3 +120,17 @@ Tagged releases require a Developer ID Application certificate and App Store Con
 The macOS release job signs the VST3 and Standalone app with the hardened runtime and secure timestamp, verifies their signatures, builds a DMG, signs it, submits it to Apple's notary service, staples the accepted ticket, and verifies Gatekeeper assessment. The unsigned macOS tarball remains a short-retention CI artifact but is excluded from public release assets; the notarized DMG is the public macOS download.
 
 The Developer ID certificate must be issued by Apple for direct distribution (not an Apple Development or Mac App Store distribution certificate). The App Store Connect API key needs permission to submit software for notarization. Keep all certificate and API material in GitHub secrets; never commit it to the repository. If these credentials are not configured, a tagged release intentionally fails rather than publishing an unsigned macOS package.
+
+
+## Shared browser engine and legacy synth
+
+The root page uses the same portable C++ voice engine as the native plugin. Its
+WebAssembly module is loaded by an AudioWorklet; the worklet reuses preallocated
+linear-memory buffers while processing audio blocks. The full original browser
+synth (including its original Web Audio engine, UI, keyboard, MIDI CC mapping,
+and microphone pitch workflow) remains available at:
+
+- `/legacy/`
+
+The deployment Dockerfile builds both pages and the WebAssembly module. The
+browser build requires Emscripten 3.1.74; CI and the deployment image provide it.
