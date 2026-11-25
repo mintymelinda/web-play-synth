@@ -11,7 +11,7 @@ class WebPlaySynthProcessor extends AudioWorkletProcessor{
     this.parameters[48]=1;this.parameters[49]=1;this.parameters[50]=1;this.parameters[51]=1;
     this.eventTypes=new Uint32Array(EVENT_CAPACITY);this.eventNotes=new Uint32Array(EVENT_CAPACITY);
     this.eventChannels=new Uint32Array(EVENT_CAPACITY);this.eventValues=new Float32Array(EVENT_CAPACITY);
-    this.eventCount=0;this.port.onmessage=e=>this.handleMessage(e.data);
+    this.eventCount=0;this.revision=1n;this.port.onmessage=e=>this.handleMessage(e.data);
     this.initialize(options.processorOptions?.wasmBytes);
   }
   async initialize(wasmBytes){
@@ -49,7 +49,7 @@ class WebPlaySynthProcessor extends AudioWorkletProcessor{
   }
   handleMessage(message){
     if(!message)return;
-    if(message.type==="parameters"&&message.values?.length===PARAMETER_COUNT)this.parameters.set(message.values);
+    if(message.type==="parameters"&&message.values?.length===PARAMETER_COUNT){this.parameters.set(message.values);this.revision=BigInt(message.revision??1);}
     else if(message.type==="event"){
       if(this.eventCount>=EVENT_CAPACITY){this.port.postMessage({type:"error",message:"MIDI event queue overflow"});return;}
       const i=this.eventCount++;this.eventTypes[i]=message.eventType>>>0;this.eventNotes[i]=message.note>>>0;
@@ -66,7 +66,7 @@ class WebPlaySynthProcessor extends AudioWorkletProcessor{
       this.dataView.setUint32(offset+4,0,true);this.dataView.setUint32(offset+8,this.eventChannels[i],true);
       this.dataView.setUint32(offset+12,this.eventNotes[i],true);this.dataView.setFloat32(offset+16,this.eventValues[i],true);
     }
-    const count=this.eventCount,status=this.render(this.parameterPointer,PARAMETER_COUNT,1,
+    const count=this.eventCount,status=this.render(this.parameterPointer,PARAMETER_COUNT,this.revision,
       count?this.eventPointer:0,count,this.leftPointer,this.rightPointer,left.length);
     this.eventCount=0;
     if(status!==0){this.port.postMessage({type:"render-error",status,eventCount:count});left.fill(0);if(right!==left)right.fill(0);return true;}
