@@ -52,9 +52,11 @@ The engine has an explicit lifecycle:
 7. `release()` returns the engine to the inert state and may release storage. It
    is not called from the real-time callback.
 
-The API types and their validation rules are implemented in
-`plugin/Source/Engine/EngineApi.h`. They are deliberately separate from the
-JUCE processor; this step does not yet move rendering or change runtime behavior.
+The API boundary types are implemented in `plugin/Source/Engine/EngineApi.h`.
+The per-voice renderer and its plain parameter structure now live in
+`plugin/Source/Engine/VoiceEngine.h` and `.cpp`, with no JUCE dependency. The
+JUCE processor owns the host adapter and voice-bank scheduling, while individual
+voice DSP state and sample rendering are implemented by the portable engine.
 
 ## Framework-neutral types
 
@@ -159,14 +161,16 @@ accommodate the extraction.
 ## Migration sequence
 
 1. Add and test the framework-neutral API types and lifecycle contract.
-2. Move the current voice renderer and voice allocator behind the API without
-   changing equations or event timing.
-3. Move effect-chain and master-output processing behind the same API.
-4. Make the JUCE processor a thin adapter and prove rendered parity plus existing
+2. Move the per-voice parameter structure and sample renderer into the portable
+   engine, preserving equations and event timing; keep host MIDI parsing and
+   voice-bank scheduling in the JUCE adapter for this stage.
+3. Move voice allocation, channel expression, and note lifecycle behind the API.
+4. Move effect-chain and master-output processing behind the same API.
+5. Make the JUCE processor a thin adapter and prove rendered parity plus existing
    MIDI/state/plugin tests.
-5. Add a native standalone harness that uses only the portable engine.
-6. Compile the portable engine to WebAssembly and connect it to an AudioWorklet.
-7. Retire the legacy Web Audio synthesis implementation only after browser audio
+6. Add a native standalone harness that uses only the portable engine.
+7. Compile the portable engine to WebAssembly and connect it to an AudioWorklet.
+8. Retire the legacy Web Audio synthesis implementation only after browser audio
    regression coverage exercises the shared engine.
 
 ## Explicit non-goals
