@@ -42,6 +42,7 @@ if(BUILD_TESTING)
         tests/PolySynthEngineTest.cpp
         Source/Engine/PolySynthEngine.cpp
         Source/Engine/VoiceEngine.cpp
+        Source/Engine/PolySynthEngine.cpp
     )
     target_include_directories(WebPlaySynthPolySynthEngineTest PRIVATE Source)
     target_compile_features(WebPlaySynthPolySynthEngineTest PRIVATE cxx_std_17)
