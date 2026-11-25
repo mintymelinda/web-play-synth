@@ -131,9 +131,12 @@ struct EngineEventView {
             return true;
         if (events == nullptr || blockFrames == 0)
             return false;
+        std::uint32_t previousOffset = 0;
         for (std::uint32_t i = 0; i < eventCount; ++i) {
-            if (!events[i].isValid(blockFrames))
+            if (!events[i].isValid(blockFrames)
+                || (i > 0 && events[i].frameOffset < previousOffset))
                 return false;
+            previousOffset = events[i].frameOffset;
         }
         return true;
     }
