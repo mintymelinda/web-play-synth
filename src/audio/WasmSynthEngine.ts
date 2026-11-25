@@ -1,4 +1,5 @@
 import type { SynthSettings } from "./SynthEngine";
+export type { Envelope, SynthSettings, Waveform } from "./SynthEngine";
 
 declare global { interface Window { __WPS_ENGINE_BACKEND__?: string; } }
 type ActiveVoice = { midiNote: number; channel: number; velocity: number };
