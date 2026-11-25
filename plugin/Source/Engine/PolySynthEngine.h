@@ -35,6 +35,12 @@ public:
     void release() noexcept override;
     bool isPrepared() const noexcept override { return prepared; }
 
+    // Read-only diagnostics used by deterministic processor regression tests.
+    std::uint32_t activeVoiceCount() const noexcept;
+    bool isVoiceSustainHeld(std::uint32_t index) const noexcept;
+    bool isVoiceAmpEnvelopeActive(std::uint32_t index) const noexcept;
+    bool isSustainPedalDown(std::uint32_t channel) const noexcept;
+
 private:
     static bool decodeParameters(const ParameterSnapshotView& snapshot,
                                  double sampleRate, SynthParameters& result) noexcept;
