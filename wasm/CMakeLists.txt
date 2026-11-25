@@ -31,8 +31,10 @@ if(EMSCRIPTEN)
         -sSTANDALONE_WASM=1
         -sFILESYSTEM=0
         -sALLOW_MEMORY_GROWTH=0
+        -sINITIAL_MEMORY=16777216
+        -sMAXIMUM_MEMORY=16777216
         -sERROR_ON_UNDEFINED_SYMBOLS=1
-        "-sEXPORTED_FUNCTIONS=['_wps_abi_version','_wps_parameter_count','_wps_event_size','_wps_prepare','_wps_release','_wps_reset','_wps_is_prepared','_wps_render']"
+        "-sEXPORTED_FUNCTIONS=['_wps_alloc','_wps_free','_wps_abi_version','_wps_parameter_count','_wps_event_size','_wps_prepare','_wps_release','_wps_reset','_wps_is_prepared','_wps_render']"
         -Wl,--no-entry
         -Wl,--export-memory
     )

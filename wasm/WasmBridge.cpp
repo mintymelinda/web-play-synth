@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <type_traits>
 
 using namespace webplaysynth::engine;
@@ -52,6 +53,9 @@ private:
 } // namespace
 
 extern "C" {
+
+void* wps_alloc(std::uint32_t bytes) noexcept { return std::malloc(bytes); }
+void wps_free(void* pointer) noexcept { std::free(pointer); }
 
 std::uint32_t wps_abi_version() noexcept { return 1; }
 std::uint32_t wps_parameter_count() noexcept { return synthParameterCount; }

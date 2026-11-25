@@ -41,6 +41,15 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+      - name: Build browser WebAssembly engine
+        run: |
+          emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build/wasm --parallel
+          mkdir -p public
+          cp build/wasm/webplaysynth_engine.wasm public/webplaysynth_engine.wasm
       - run: npm run build
       - name: Check deployment scripts
         run: bash -n scripts/deploy.sh scripts/rollback.sh
@@ -54,6 +63,15 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+      - name: Build browser WebAssembly engine
+        run: |
+          emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build/wasm --parallel
+          mkdir -p public
+          cp build/wasm/webplaysynth_engine.wasm public/webplaysynth_engine.wasm
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
       - run: npm run build

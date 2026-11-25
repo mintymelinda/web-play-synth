@@ -21,6 +21,7 @@ test("the browser synth produces audio while a key is held and releases to silen
 
   await page.goto("/");
   await page.getByRole("button", { name: "POWER ON" }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __WPS_ENGINE_BACKEND__?: string }).__WPS_ENGINE_BACKEND__)).toBe("wasm");
 
   const firstKey = page.locator(".piano .white-key").first();
   await firstKey.hover();
