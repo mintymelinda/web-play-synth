@@ -53,6 +53,17 @@ jobs:
       - run: npm run build
       - name: Check deployment scripts
         run: bash -n scripts/deploy.sh scripts/rollback.sh
+      - name: Build and inspect the Docker deployment artifact
+        run: |
+          docker build --target build --tag web-play-synth-builder:ci .
+          container_id="$(docker create web-play-synth-builder:ci)"
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          mkdir -p /tmp/web-play-synth-dist
+          docker cp "$container_id:/app/dist/." /tmp/web-play-synth-dist/
+          test -s /tmp/web-play-synth-dist/index.html
+          test -s /tmp/web-play-synth-dist/legacy/index.html
+          test -s /tmp/web-play-synth-dist/webplaysynth_engine.wasm
+          test -s /tmp/web-play-synth-dist/synth-worklet.js
 
   browser-audio:
     name: Browser audio playback (Chromium)
