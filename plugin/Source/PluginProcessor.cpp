@@ -35,7 +35,7 @@ public:
         juce::MidiMessage message;
         int samplePosition = 0;
         while (iterator.getNextEvent(message, samplePosition)) {
-            if (convert(message, samplePosition, event))
+            if (convert(message, samplePosition, event, frames))
                 return true;
         }
         return false;
@@ -425,7 +425,6 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b, juce:
     for (const auto metadata : midi)
         handleMidiMessage(metadata.getMessage(), p);
 
-    using webplaysynth::engine::SynthParameter;
     const std::array<float, webplaysynth::engine::synthParameterCount> values {{
         static_cast<float>(p.osc1Wave), static_cast<float>(p.osc2Wave),
         p.osc1Octave, p.osc1Tune, p.osc1Level, p.osc1PulseWidth,
@@ -443,8 +442,8 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b, juce:
         p.glideTime, p.vco1Enabled ? 1.0f : 0.0f, p.vco2Enabled ? 1.0f : 0.0f,
         p.filterEnvEnabled ? 1.0f : 0.0f, p.ampEnvEnabled ? 1.0f : 0.0f
     }};
-    static_assert(values.size() == webplaysynth::engine::synthParameterCount,
-        "host parameter snapshot must match the portable engine schema");
+    static_assert(webplaysynth::engine::synthParameterCount == 52,
+        "update the JUCE snapshot mapping when the portable parameter schema changes");
 
     std::array<float*, webplaysynth::engine::maximumAudioChannels> outputChannels {};
     for (int channel = 0; channel < output.getNumChannels(); ++channel)
