@@ -8,7 +8,115 @@
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
+
+class JuceMidiEventSource final : public webplaysynth::engine::IEngineEventSource {
+public:
+    JuceMidiEventSource(const juce::MidiBuffer& midi, int blockFrames)
+        : iterator(midi), frames(blockFrames)
+    {
+        juce::MidiBuffer::Iterator counter(midi);
+        juce::MidiMessage message;
+        int samplePosition = 0;
+        while (counter.getNextEvent(message, samplePosition)) {
+            webplaysynth::engine::EngineEvent event;
+            if (convert(message, samplePosition, event))
+                ++count;
+        }
+        rewind();
+    }
+
+    void rewind() noexcept override
+    {
+        iterator.setNextSamplePosition(0);
+    }
+
+    bool next(webplaysynth::engine::EngineEvent& event) noexcept override
+    {
+        juce::MidiMessage message;
+        int samplePosition = 0;
+        while (iterator.getNextEvent(message, samplePosition)) {
+            if (convert(message, samplePosition, event))
+                return true;
+        }
+        return false;
+    }
+
+    std::uint32_t eventCount() const noexcept { return count; }
+
+private:
+    static bool convert(const juce::MidiMessage& message, int samplePosition,
+                        webplaysynth::engine::EngineEvent& event) noexcept
+    {
+        using webplaysynth::engine::EngineEventType;
+        const auto channel = juce::jlimit(1, 16, message.getChannel());
+        event.channel = static_cast<std::uint8_t>(channel);
+        event.frameOffset = static_cast<std::uint32_t>(
+            juce::jlimit(0, framesForConversion, samplePosition));
+
+        if (message.isNoteOn(true)) {
+            event.type = EngineEventType::noteOn;
+            event.note = static_cast<std::uint8_t>(message.getNoteNumber());
+            event.value = message.getFloatVelocity();
+            return true;
+        }
+        if (message.isNoteOff()) {
+            event.type = EngineEventType::noteOff;
+            event.note = static_cast<std::uint8_t>(message.getNoteNumber());
+            event.value = 0.0f;
+            return true;
+        }
+        if (message.isPitchWheel()) {
+            event.type = EngineEventType::pitchBend;
+            event.value = (static_cast<float>(message.getPitchWheelValue()) - 8192.0f)
+                / 8192.0f;
+            return true;
+        }
+        if (message.isChannelPressure()) {
+            event.type = EngineEventType::channelPressure;
+            event.value = static_cast<float>(message.getChannelPressureValue()) / 127.0f;
+            return true;
+        }
+        if (message.isAftertouch()) {
+            event.type = EngineEventType::polyphonicKeyPressure;
+            event.note = static_cast<std::uint8_t>(message.getNoteNumber());
+            event.value = static_cast<float>(message.getAfterTouchValue()) / 127.0f;
+            return true;
+        }
+        if (message.isController()) {
+            const auto cc = message.getControllerNumber();
+            if (cc == 64) {
+                event.type = EngineEventType::sustainPedal;
+                event.value = message.getControllerValue() >= 64 ? 1.0f : 0.0f;
+                return true;
+            }
+            if (cc == 120) {
+                event.type = EngineEventType::allSoundOff;
+                event.value = 0.0f;
+                return true;
+            }
+            if (cc == 121) {
+                event.type = EngineEventType::resetControllers;
+                event.value = 0.0f;
+                return true;
+            }
+            if (cc == 123) {
+                event.type = EngineEventType::allNotesOff;
+                event.value = 0.0f;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Conversion is bounded to the current JUCE block; an event at the block
+    // boundary is retained so it takes effect at the start of the next block.
+    static constexpr int framesForConversion = 0x7fffffff;
+    juce::MidiBuffer::Iterator iterator;
+    int frames = 0;
+    std::uint32_t count = 0;
+};
 }
+
 
 const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
 {
