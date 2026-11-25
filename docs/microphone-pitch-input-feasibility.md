@@ -1,24 +1,29 @@
-# Microphone pitch input — feasibility and architecture
+# Microphone pitch input — feasibility and implementation gates
 
-**Status:** Proposed architecture; implementation is gated on host-routing validation.  
-**Scope:** Optional monophonic pitch tracking for the JUCE VST3/Standalone instrument.  
-**Non-goal:** Polyphonic audio-to-MIDI, microphone device management, or audio-through effects processing.
+**Status:** Input-bus feasibility spike implemented; real-host routing validation still required. Pitch detection and the dedicated synth voice remain deferred.
+**Scope:** Optional monophonic pitch tracking for the JUCE VST3/Standalone instrument.
+**Non-goals:** Polyphonic audio-to-MIDI, plugin-owned microphone/device management, or microphone audio pass-through.
 
 ## Decision
 
-Use a **host-routed optional mono audio input bus** on the instrument. The DAW owns device selection, microphone permissions, input monitoring, and routing. The plugin analyses the incoming signal to control a dedicated monophonic synth voice; it does not monitor, mix, or pass the source audio through to its output.
+Use a host-routed optional mono audio input bus. The DAW owns device selection, microphone permissions, input monitoring, and routing. The plugin will analyse incoming samples and control a dedicated monophonic synth voice; it will not monitor, mix, or pass source audio through to its output.
 
-This is preferable to opening an audio device from inside the plugin. A plugin must not independently request microphone permission or compete with the host for exclusive device access. It also keeps the pitch detector independent of browser APIs and suitable for eventual reuse in the shared C++ engine.
+Do not open an audio device from inside the plugin. Do not add platform microphone APIs or browser permission flows to the native plugin.
 
-This is an architecture recommendation, not a claim that every DAW supports audio routing into an instrument. That is the principal feasibility gate.
+## Current implementation (main)
 
-## Findings from the current implementation
+The first feasibility step is already present:
 
-- The JUCE processor currently declares MIDI input and mono/stereo output, but no audio input bus.
-- The processor is a VST3 instrument (IS_SYNTH TRUE, NEEDS_MIDI_INPUT TRUE).
-- Its existing 16-voice pool is driven by MIDI note events. Microphone pitch is monophonic and should not consume or steal those voices.
-- The browser version already has a monophonic pitch-following path, a 55–1000 Hz accepted frequency range, a level gate, and a separate tracked voice. It requests microphone access in the browser; that device/permission code must not be ported to the plugin.
-- The existing JUCE processing path clears the output buffer and renders synth voices. The new input must be analysis-only so the source signal cannot accidentally be heard or create an audio feedback loop.
+- The processor declares an optional mono input bus named **Pitch Input**, disabled by default.
+- The processor accepts the disabled or mono input layout while retaining supported mono/stereo output layouts and MIDI input.
+- The audio callback reads the input through JUCE's bus-aware buffer API before touching the output bus.
+- It publishes an input RMS value for the editor meter. It does not yet detect pitch or generate notes.
+- The editor indicates whether the bus is enabled and displays its measured input level.
+- Native smoke tests cover the default disabled layout, enabling the mono bus, delivery of a known input signal, continued MIDI sound while input is present, and isolation of input audio from the synth output.
+
+These tests prove processor-level buffer handling. They do **not** prove that a DAW exposes a usable routing path to this VST3 input bus.
+
+The old browser microphone workflow remains available only through `/legacy/`. The root browser app now uses the shared C++ engine compiled to WebAssembly; do not silently reintroduce the legacy Web Audio engine into the root app.
 
 ## Proposed signal flow
 
@@ -44,98 +49,64 @@ Microphone / instrument / audio track
 MIDI input ----------------> existing 16-voice pool
 ```
 
-The pitch-analysis worker must never call into the synth voice pool, mutate APVTS parameters, or access editor components. It publishes only a bounded, validated pitch estimate and gate state. The audio thread consumes those values and owns all voice changes.
+The worker must never call the synth engine, mutate APVTS parameters, or access editor components. It publishes only bounded, validated pitch/gate results. The audio thread owns all voice changes. The microphone voice must not consume or steal any of the existing 16 MIDI voices.
 
-## Input bus and host contract
+## Gate 1 — real-host routing (still open)
 
-- Add one optional mono input bus named **Pitch Input**, disabled by default.
-- Preserve the existing mono/stereo output layouts and MIDI input.
-- Accept the input bus only when it is disabled or mono. Do not silently reinterpret multichannel input as a microphone array; downmix only if a host supplies a stereo layout that is deliberately supported.
-- Do not copy input samples to output. The plugin remains an instrument, not an audio-through effect.
-- Do not enumerate devices, open AudioDeviceManager, request permissions, or access platform microphone APIs from plugin code.
-- The user enables the bus and routes a mono audio track/input to it in the DAW. The editor should show a clear “no pitch input routed” / “tracking” state rather than pretending to know which physical microphone is selected.
-- Keep the bus disabled by default so existing sessions and hosts retain their current behavior.
-- Use JUCE's bus-aware buffer access (getBusBuffer / getChannelIndexInProcessBlockBuffer) rather than assuming input and output channels occupy the same offsets.
-- JUCE documents that processBlock receives at least the maximum of total input/output channels. Input-only channels may be read-only when there are more inputs than outputs. The current unconditional whole-buffer clear must therefore be replaced with bus-aware output clearing: inspect/copy the input first, then clear/write only the output bus. Never clear or write input-only channels.
-- JUCE references: [AudioProcessor::processBlock and getBusBuffer](https://docs.juce.com/develop/classjuce_1_1AudioProcessor.html), [JUCE audio bus layout tutorial](https://juce.com/tutorials/tutorial_audio_bus_layouts/).
+Before implementing pitch detection or adding tracking UI:
 
-**Important compatibility risk:** Some DAWs do not expose audio routing into instrument plugins, or expose it differently for instrument/sidechain buses. pluginval can validate plugin structure and processing but cannot prove the routing UI exists or works in a real DAW. Do not mark the feature generally supported until the host matrix below is exercised.
+1. Load the current VST3 in REAPER and at least one other DAW (prefer Bitwig or Ableton).
+2. Enable the plugin's **Pitch Input** bus in the host's plugin I/O or routing controls.
+3. Route a mono audio track/input to that bus.
+4. Confirm the plugin's input meter responds to the routed signal.
+5. Confirm MIDI notes continue to sound while the input bus is enabled.
+6. Disable the bus and reopen a session saved with the default MIDI-only layout; verify the old layout remains usable.
+7. Record DAW name/version, OS, routing steps, and any host-specific limitations.
 
-## Pitch analysis and timing
+A passing pluginval run or a direct `AudioProcessor::processBlock` smoke test is not evidence that the DAW exposes this routing UI. Do not mark a host supported without the manual check.
 
-Use a monophonic detector (YIN/CMND or normalized autocorrelation with confidence checks), not polyphonic transcription. The browser detector is a behavioral reference, not a requirement to copy its current quadratic work into the real-time callback.
+If common hosts cannot route audio into an instrument, stop and evaluate a companion audio-to-MIDI effect or a separate instrument/effect variant. Do not compromise the existing instrument's host compatibility to force this feature.
 
-- Capture samples into a preallocated single-producer/single-consumer FIFO from processBlock.
+## Gate 2 — detector in isolation
+
+After Gate 1 passes, implement a monophonic detector (YIN/CMND or normalized autocorrelation with confidence checks). The browser detector is a behavioral reference, not a requirement to copy its current quadratic work into the real-time callback.
+
+- Capture samples into a preallocated single-producer/single-consumer FIFO from `processBlock`.
 - Run window analysis on a dedicated worker thread. No heap allocation, blocking locks, logging, UI calls, or unbounded work in the audio callback.
-- Publish the latest estimate through atomics; apply pitch/gate changes to the dedicated voice only on the audio thread.
-- Start evaluation with a 55–1000 Hz range to match the browser feature. Reject low-confidence estimates and smooth/hysteresis-filter pitch changes to reduce octave jumps and vibrato chatter.
-- Use an RMS/noise gate with attack/release hysteresis. Silence or loss of confidence must release the mic voice; it must never leave a stuck note.
-- Reuse the synth's oscillator, filter, envelope, glide, and master controls. The microphone voice is monophonic and separate from the 16 MIDI voices.
-- Analysis windows must balance low-note stability and latency. At 48 kHz, 2048 samples span 42.7 ms and 4096 span 85.3 ms. A 55 Hz signal has a period of about 18.2 ms, so the lowest octave may require the longer window. These are window durations, not end-to-end latency promises; hop size, scheduling, host block size, and smoothing add delay.
-- Measure CPU and pitch-to-sound latency at 44.1, 48, 96, and 192 kHz and common block sizes before selecting defaults. If the low-note latency is unacceptable, narrow the supported low-frequency range rather than hiding the delay with aggressive tracking.
+- Publish the latest estimate through atomics; apply pitch/gate changes only on the audio thread.
+- Start with the browser's 55–1000 Hz range. Reject low-confidence estimates and use smoothing/hysteresis to reduce octave jumps and vibrato chatter.
+- Use an RMS/noise gate with attack/release hysteresis. Silence or loss of confidence must release the mic voice.
+- Test known tones at 55, 65, 82, 110, 220, 440, 880, and 1000 Hz, plus silence, low-level signals, noise, harmonics, vibrato, fast note changes, and abrupt disconnection.
+- Measure pitch error, octave-error rate, gate response, CPU, and pitch-to-sound latency at 44.1, 48, 96, and 192 kHz and common block sizes.
 
-## Voice interaction rules
+At 48 kHz, 2048 samples span 42.7 ms and 4096 samples span 85.3 ms. A 55 Hz signal has a period of about 18.2 ms, so low-note stability may require a longer window. These are window durations, not end-to-end latency promises; hop size, scheduling, host block size, and smoothing add delay. Narrow the supported low-frequency range if measured latency is unacceptable rather than hiding it with aggressive tracking.
 
-- MIDI note input continues to use the existing 16-voice pool and must remain unaffected when pitch tracking is disabled.
-- The microphone gets one dedicated monophonic voice, so it cannot steal a MIDI voice.
-- The mic voice uses the same patch parameters and synth output as MIDI voices.
-- MIDI and microphone voices may sound together. This is deliberate and should be documented; it avoids surprising priority rules and lets the player blend a mic-controlled line with keyboard performance.
-- A tracking gate close, disabled input, bus disconnection, transport stop, or plugin release must release/clear the mic voice.
-- Do not create synthetic MIDI events or feed pitch estimates back through the MIDI CC mapping path.
+## Gate 3 — dedicated voice integration
 
-## UX proposal
+- Add one monophonic mic voice independent of the MIDI voice pool.
+- Reuse the authoritative synth engine's oscillator, filter, envelope, glide, and master controls.
+- Keep MIDI and microphone voices able to sound together; do not add synthetic MIDI events or route pitch estimates through MIDI CC mapping.
+- Release the mic voice on silence, loss of confidence, bus disconnect, disable, transport stop, and plugin resource release.
+- Verify MIDI-only, mic-only, and simultaneous playback, plus no source-audio pass-through.
+- Persist only the enable setting; never persist transient pitch/gate state.
 
-Keep the feature optional and visibly separate from MIDI:
-- A **Pitch Tracking** enable control, off by default and saved with plugin state.
-- A status line with states such as **Input not routed**, **Listening for pitch**, **Tracking C4 · +7 cents**, and **No stable pitch**.
-- A simple input level/gate indication is useful; avoid adding physical device selection or a second routing panel.
-- Explain that the user must route a mono track/input to the plugin's Pitch Input bus in the DAW.
-- If the host does not expose the input bus, show a useful unavailable state; do not fall back to opening the microphone directly.
+## Gate 4 — minimal editor and acceptance
 
-The status display is informational and must not drive audio processing. Any UI polling reads atomics only.
+Only after routing and detector behavior are proven, add an enable control (off by default) and a concise status display such as **Input not routed**, **Listening for pitch**, **Tracking C4 · +7 cents**, or **No stable pitch**. UI polling may read atomics only and must not drive processing.
 
-## Feasibility gates and implementation sequence
-
-### Gate 1 — prove host routing before implementing the detector
-
-1. Add the optional mono input bus without changing default output or MIDI behavior.
-2. Confirm JUCE exposes the expected VST3 bus arrangement and the plugin still passes strictness-level-5 pluginval.
-3. Exercise real routing in at least REAPER and one other DAW (prefer Bitwig or Ableton): route a mono audio track into the instrument's Pitch Input bus and confirm the processor receives non-zero samples.
-4. Verify the bus can be disabled and that old sessions/default layouts remain valid.
-5. If common hosts cannot route audio into an instrument, stop and evaluate a separate companion audio-to-MIDI effect or a separate instrument/effect variant. Do not compromise the existing instrument's host compatibility to force this feature.
-
-### Gate 2 — validate the DSP in isolation
-
-- Unit-test known sine waves at 55, 65, 82, 110, 220, 440, 880, and 1000 Hz.
-- Test silence, low-level signals, broadband noise, harmonics, vibrato, fast note changes, and abrupt input disconnection.
-- Measure pitch error, octave-error rate, gate response, end-to-end latency, and CPU.
-- Confirm all analysis buffers and worker communication are bounded and preallocated.
-
-### Gate 3 — integrate the monophonic voice
-
-- Add a dedicated mic voice independent of the MIDI voice array.
-- Test MIDI-only, mic-only, and simultaneous MIDI + mic playback.
-- Verify note release on silence, bus disconnect, disable, stop, and releaseResources.
-- Verify no source-audio pass-through and no change to existing MIDI/CC/state behavior.
-- Persist the enable setting; do not persist transient pitch/gate state.
-
-### Gate 4 — editor and host acceptance
-
-- Add the minimal enable/status UI only after the input bus is proven in hosts.
-- Record DAW name/version, OS, bus-routing steps, and observed latency.
-- Keep microphone pitch tracking optional and document host-specific limitations.
+Record host/version, OS, routing steps, latency, CPU, and known limitations. The DAW remains responsible for device selection and permissions.
 
 ## Acceptance criteria
 
-- Default plugin behavior and saved sessions remain compatible with the input bus disabled.
-- The host can route mono audio into the plugin in each host declared supported.
-- Input samples are never passed through to the plugin output.
-- Stable monophonic pitch tracking works across the tested range with documented error/latency.
-- No stuck notes on silence, disconnection, stop, disable, or release.
-- MIDI polyphony, MIDI CC mapping, host automation, and state restore remain intact.
-- No microphone/device permission or device-selection code exists in the plugin.
-- CPU, latency, and host-routing results are recorded rather than assumed.
+- Existing MIDI-only sessions and default behavior remain compatible with the input bus disabled.
+- Each declared supported host can route mono audio into the plugin.
+- Input audio is never passed through to the output.
+- Pitch tracking is stable across the measured supported range, with documented error and latency.
+- Silence, disconnection, stop, disable, and release cannot leave a stuck mic voice.
+- MIDI polyphony, MIDI CC mapping, automation, and state restoration remain intact.
+- No plugin-owned microphone permission or device-selection code exists.
+- Real-host routing, CPU, and latency claims are backed by recorded evidence.
 
 ## Current conclusion
 
-**Technically plausible, but host routing is unproven.** The optional host-routed mono input bus is the preferred design because it respects DAW ownership and keeps the detector portable. The next implementation should be a narrow bus-routing spike plus host validation, not a full pitch detector or UI. If the DAW matrix fails, evaluate a companion audio-to-MIDI plugin before proceeding.
+**The processor-level input-bus spike is complete; real-host routing is the next task.** The input RMS meter and smoke tests establish that the current processor can safely receive and isolate mono input. They do not establish DAW routing compatibility. Keep pitch detection, dedicated voice integration, and editor controls deferred until Gate 1 is demonstrated in real hosts.
