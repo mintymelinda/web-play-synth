@@ -33,7 +33,9 @@ test("the browser synth produces audio while a key is held and releases to silen
   await page.mouse.down();
 
   await page.waitForFunction(() => {
-    const analyser = (window as Window & { synthOutputAnalyser?: AnalyserNode }).synthOutputAnalyser;
+    const state = window as Window & { synthOutputAnalyser?: AnalyserNode; __WPS_RENDER_ERROR__?: string };
+    if (state.__WPS_RENDER_ERROR__) throw new Error(state.__WPS_RENDER_ERROR__);
+    const analyser = state.synthOutputAnalyser;
     if (!analyser) return false;
 
     const samples = new Float32Array(analyser.fftSize);

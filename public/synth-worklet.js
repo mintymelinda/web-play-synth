@@ -69,7 +69,7 @@ class WebPlaySynthProcessor extends AudioWorkletProcessor{
     const count=this.eventCount,status=this.render(this.parameterPointer,PARAMETER_COUNT,1,
       count?this.eventPointer:0,count,this.leftPointer,this.rightPointer,left.length);
     this.eventCount=0;
-    if(status!==0){left.fill(0);if(right!==left)right.fill(0);return true;}
+    if(status!==0){this.port.postMessage({type:"render-error",status,eventCount:count});left.fill(0);if(right!==left)right.fill(0);return true;}
     for(let i=0;i<left.length;i++){left[i]=this.leftView[i];if(right!==left)right[i]=this.rightView[i];}
     return true;
   }

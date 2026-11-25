@@ -1,7 +1,7 @@
 import type { SynthSettings } from "./SynthEngine";
 export type { Envelope, SynthSettings, Waveform } from "./SynthEngine";
 
-declare global { interface Window { __WPS_ENGINE_BACKEND__?: string; __WPS_ENGINE_ERROR__?: string; } }
+declare global { interface Window { __WPS_ENGINE_BACKEND__?: string; __WPS_ENGINE_ERROR__?: string; __WPS_RENDER_ERROR__?: string; } }
 type ActiveVoice = { midiNote: number; channel: number; velocity: number };
 const waveformIndex: Record<string, number> = { sine: 0, triangle: 1, sawtooth: 2, square: 3 };
 
@@ -49,6 +49,7 @@ export class WasmSynthEngine {
           node.port.onmessage=(event:MessageEvent)=>{
             if(event.data?.type==="ready"){window.clearTimeout(timeout);window.__WPS_ENGINE_BACKEND__="wasm";resolve();}
             else if(event.data?.type==="error"){window.clearTimeout(timeout);reject(new Error(String(event.data.message??"WebAssembly synth initialization failed")));}
+            else if(event.data?.type==="render-error"){window.__WPS_RENDER_ERROR__="WASM render status "+event.data.status+"; events="+event.data.eventCount;}
           };
         });
         await resumed;
