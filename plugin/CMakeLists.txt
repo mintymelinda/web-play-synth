@@ -116,6 +116,7 @@ if(BUILD_TESTING)
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/Engine/VoiceEngine.cpp
+        Source/Engine/PolySynthEngine.cpp
     )
     target_link_libraries(WebPlaySynthSmokeTest PRIVATE juce::juce_audio_utils juce::juce_dsp)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)
