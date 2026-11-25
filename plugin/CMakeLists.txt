@@ -33,6 +33,11 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(WebPlaySynthEngineApiTest tests/EngineApiTest.cpp)
+    target_include_directories(WebPlaySynthEngineApiTest PRIVATE Source)
+    target_compile_features(WebPlaySynthEngineApiTest PRIVATE cxx_std_17)
+    add_test(NAME native-shared-engine-api COMMAND WebPlaySynthEngineApiTest)
+
     add_executable(WebPlaySynthOscillatorPrimitivesTest tests/OscillatorPrimitivesTest.cpp)
     target_include_directories(WebPlaySynthOscillatorPrimitivesTest PRIVATE Source)
     target_compile_features(WebPlaySynthOscillatorPrimitivesTest PRIVATE cxx_std_17)
