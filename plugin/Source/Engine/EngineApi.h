@@ -241,3 +241,5 @@ public:
     virtual void release() noexcept = 0;
     virtual bool isPrepared() const noexcept = 0;
 };
+
+} // namespace webplaysynth::engine
