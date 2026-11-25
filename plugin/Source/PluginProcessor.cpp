@@ -19,7 +19,7 @@ public:
         int samplePosition = 0;
         while (counter.getNextEvent(message, samplePosition)) {
             webplaysynth::engine::EngineEvent event;
-            if (convert(message, samplePosition, event))
+            if (convert(message, samplePosition, event, frames))
                 ++count;
         }
         rewind();
@@ -45,13 +45,13 @@ public:
 
 private:
     static bool convert(const juce::MidiMessage& message, int samplePosition,
-                        webplaysynth::engine::EngineEvent& event) noexcept
+                        webplaysynth::engine::EngineEvent& event, int blockFrames) noexcept
     {
         using webplaysynth::engine::EngineEventType;
         const auto channel = juce::jlimit(1, 16, message.getChannel());
         event.channel = static_cast<std::uint8_t>(channel);
         event.frameOffset = static_cast<std::uint32_t>(
-            juce::jlimit(0, framesForConversion, samplePosition));
+            juce::jlimit(0, blockFrames, samplePosition));
 
         if (message.isNoteOn(true)) {
             event.type = EngineEventType::noteOn;
@@ -108,9 +108,6 @@ private:
         return false;
     }
 
-    // Conversion is bounded to the current JUCE block; an event at the block
-    // boundary is retained so it takes effect at the start of the next block.
-    static constexpr int framesForConversion = 0x7fffffff;
     juce::MidiBuffer::Iterator iterator;
     int frames = 0;
     std::uint32_t count = 0;
@@ -312,30 +309,34 @@ double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
     return tailSeconds;
 }
 
-void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
+void WebPlaySynthAudioProcessor::prepareToPlay(double sr, int maximumExpectedSamplesPerBlock)
 {
-    currentSampleRate=sr; lastPlayedFrequency=0;
-    for(auto& v:voices) v.prepare(sr);
+    currentSampleRate = sr;
+    const auto outputChannels = juce::jlimit(1, 2, getTotalNumOutputChannels());
+    engine.prepare({
+        sr,
+        static_cast<std::uint32_t>(juce::jmax(1, maximumExpectedSamplesPerBlock)),
+        0,
+        static_cast<std::uint32_t>(outputChannels)
+    });
+
     // Set the parameter targets before setSampleRate() resets JUCE's smoothers,
     // so the first dry block starts at unity instead of ramping from JUCE's
     // constructor default gain.
     webplaysynth::dsp::StereoReverb::Parameters initialReverbParameters;
-    initialReverbParameters.roomSize=parameters.getRawParameterValue("reverbRoom")->load();
-    initialReverbParameters.damping=parameters.getRawParameterValue("reverbDamping")->load();
-    initialReverbParameters.wetLevel=parameters.getRawParameterValue("reverbMix")->load();
-    initialReverbParameters.dryLevel=0.5f*(1.0f-initialReverbParameters.wetLevel);
-    initialReverbParameters.width=1.0f;
-    initialReverbParameters.freezeMode=0.0f;
+    initialReverbParameters.roomSize = parameters.getRawParameterValue("reverbRoom")->load();
+    initialReverbParameters.damping = parameters.getRawParameterValue("reverbDamping")->load();
+    initialReverbParameters.wetLevel = parameters.getRawParameterValue("reverbMix")->load();
+    initialReverbParameters.dryLevel = 0.5f * (1.0f - initialReverbParameters.wetLevel);
+    initialReverbParameters.width = 1.0f;
+    initialReverbParameters.freezeMode = 0.0f;
     reverb.prepare(sr, initialReverbParameters);
     chorus.prepare(sr);
     delay.prepare(sr);
 }
 void WebPlaySynthAudioProcessor::releaseResources()
 {
-    for(auto& v:voices) { v.active=false; v.keyDown=false; v.sustainHeld=false; }
-    channelPitchBendSemitones.fill(0.0f);
-    channelAftertouch.fill(0.0f);
-    sustainPedalDown.fill(false);
+    engine.release();
     reverb.reset();
     chorus.reset();
     delay.reset();
@@ -394,7 +395,7 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     }
     return p;
 }
-void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& midi)
+void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals guard;
 
@@ -419,15 +420,51 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::
     output.clear();
 
     const auto p = readParameters();
-    int pos = 0;
-    for (const auto meta : midi) {
-        const auto at = juce::jlimit(pos, output.getNumSamples(), meta.samplePosition);
-        renderRange(output, pos, at, p);
-        handleMidiMessage(meta.getMessage(), p);
-        pos = at;
-    }
-    renderRange(output, pos, output.getNumSamples(), p);
-    processEffects(output,p);
+    // MIDI CC learn remains a JUCE/APVTS host concern. The portable engine
+    // receives the performance events through the streaming event view.
+    for (const auto metadata : midi)
+        handleMidiMessage(metadata.getMessage(), p);
+
+    using webplaysynth::engine::SynthParameter;
+    const std::array<float, webplaysynth::engine::synthParameterCount> values {{
+        static_cast<float>(p.osc1Wave), static_cast<float>(p.osc2Wave),
+        p.osc1Octave, p.osc1Tune, p.osc1Level, p.osc1PulseWidth,
+        p.osc2Octave, p.osc2Tune, p.osc2Level, p.osc2PulseWidth,
+        p.hardSync ? 1.0f : 0.0f, p.crossMod,
+        p.cutoff, p.resonance, p.filterContour, static_cast<float>(p.filterType),
+        p.filterDrive, p.aftertouchDepth,
+        p.filterAttack, p.filterDecay, p.filterSustain, p.filterRelease,
+        p.ampAttack, p.ampDecay, p.ampSustain, p.ampRelease,
+        static_cast<float>(p.lfoWave), p.lfoRate, p.lfoPitchDepth, p.lfoFilterDepth,
+        p.lfoAmpDepth, p.lfoPanDepth, p.lfoPulseDepth,
+        p.master, static_cast<float>(p.unisonVoices), p.unisonDetune, p.stereoSpread,
+        p.chorusRate, p.chorusDepth, p.chorusMix, p.delayTime, p.delayFeedback, p.delayMix,
+        p.reverbMix, p.reverbRoom, p.reverbDamping, p.glideEnabled ? 1.0f : 0.0f,
+        p.glideTime, p.vco1Enabled ? 1.0f : 0.0f, p.vco2Enabled ? 1.0f : 0.0f,
+        p.filterEnvEnabled ? 1.0f : 0.0f, p.ampEnvEnabled ? 1.0f : 0.0f
+    }};
+    static_assert(values.size() == webplaysynth::engine::synthParameterCount,
+        "host parameter snapshot must match the portable engine schema");
+
+    std::array<float*, webplaysynth::engine::maximumAudioChannels> outputChannels {};
+    for (int channel = 0; channel < output.getNumChannels(); ++channel)
+        outputChannels[static_cast<std::size_t>(channel)] = output.getWritePointer(channel);
+
+    JuceMidiEventSource eventSource(midi, output.getNumSamples());
+    const auto frameCount = static_cast<std::uint32_t>(output.getNumSamples());
+    webplaysynth::engine::EngineProcessBlock engineBlock {
+        { nullptr, 0, 0 },
+        { outputChannels.data(), static_cast<std::uint32_t>(output.getNumChannels()), frameCount },
+        { nullptr, eventSource.eventCount(), &eventSource },
+        { values.data(), static_cast<std::uint32_t>(values.size()),
+            webplaysynth::engine::parameterSchemaVersion, 0 },
+        { nullptr, 0, frameCount }
+    };
+    const auto status = engine.process(engineBlock);
+    if (status != webplaysynth::engine::EngineStatus::ok)
+        output.clear();
+
+    processEffects(output, p);
     output.applyGain(p.master);
 }
 
