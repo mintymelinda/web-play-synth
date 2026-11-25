@@ -90,30 +90,28 @@ void Voice::render(const SynthParameters& p,double sr,float& left,float& right,
     float mixLeft=0.0f, mixRight=0.0f;
     for (int layer=0; layer<unisonCount; ++layer) {
         const auto detuneRatio = p.unisonDetuneRatios[static_cast<size_t>(layer)];
-        const auto f1=std::clamp(
-            webplaysynth::dsp::modulateFrequency(base1,detuneRatio,lfo,p.lfoPitchDepth));
-        const auto f2=std::clamp(
-            webplaysynth::dsp::modulateFrequency(base2,detuneRatio,lfo,p.lfoPitchDepth));
+        const auto f1=std::clamp(webplaysynth::dsp::modulateFrequency(base1,detuneRatio,lfo,p.lfoPitchDepth), 10.0, 20000.0);
+        const auto f2=std::clamp(webplaysynth::dsp::modulateFrequency(base2,detuneRatio,lfo,p.lfoPitchDepth), 10.0, 20000.0);
         const auto inc2=f2/sr;
         float s2=0.0f;
         if (p.hardSync) {
             // The browser engine builds a saw-shaped PeriodicWave from the
             // oscillator frequency ratio, overriding VCO 2's selected waveform.
             const auto syncRatio=p.hardSyncRatio;
-            const auto syncMasterFrequency=std::clamp(f1);
+            const auto syncMasterFrequency=std::clamp(f1, 10.0, 20000.0);
             const auto syncPhase=phase2[static_cast<size_t>(layer)]*syncRatio;
             const auto wrappedSyncPhase=syncPhase-std::floor(syncPhase);
-            const auto syncIncrement=std::clamp(syncRatio*syncMasterFrequency/sr);
+            const auto syncIncrement=std::clamp(syncRatio*syncMasterFrequency/sr, 0.0001, 0.49);
             s2=webplaysynth::dsp::oscillatorSample(wrappedSyncPhase,syncIncrement,2);
             const auto masterResetFraction=syncRatio-std::floor(syncRatio);
-            const auto masterIncrement=std::clamp(syncMasterFrequency/sr);
+            const auto masterIncrement=std::clamp(syncMasterFrequency/sr, 0.0001, 0.49);
             s2-=static_cast<float>(masterResetFraction)
                 * webplaysynth::dsp::polyBlep(phase2[static_cast<size_t>(layer)],masterIncrement);
         } else {
             s2=webplaysynth::dsp::oscillatorSample(phase2[static_cast<size_t>(layer)],inc2,p.osc2Wave,
                 webplaysynth::dsp::modulatePulseWidth(p.osc2PulseWidth,lfo,p.lfoPulseDepth));
         }
-        const auto fm=std::clamp(f1+s2*p.crossMod);
+        const auto fm=std::clamp(f1+s2*p.crossMod, 10.0, 20000.0);
         const auto oldPhase=phase1[static_cast<size_t>(layer)];
         const auto increment1=fm/sr;
         const auto s1=webplaysynth::dsp::oscillatorSample(oldPhase,increment1,p.osc1Wave,
