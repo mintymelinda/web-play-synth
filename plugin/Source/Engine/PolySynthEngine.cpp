@@ -340,7 +340,6 @@ void PolySynthEngine::release() noexcept
     specification = {};
 }
 
-} // namespace webplaysynth::engine
 
 std::uint32_t PolySynthEngine::activeVoiceCount() const noexcept
 {
@@ -366,3 +365,5 @@ bool PolySynthEngine::isSustainPedalDown(std::uint32_t channel) const noexcept
     return channel > 0 && channel <= sustainPedalDown.size()
         && sustainPedalDown[channel - 1];
 }
+
+} // namespace webplaysynth::engine
