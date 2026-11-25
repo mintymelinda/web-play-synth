@@ -59,6 +59,7 @@ int main()
     std::array<float, 16> left{}, right{}, lfo{};
     std::array<float*, 2> outputChannels{left.data(), right.data()};
     std::array<const float*, 1> modulationSources{lfo.data()};
+    std::array<const float*, 1> inputChannels{lfo.data()};
     const std::array<float, 3> parameterValues{0.25f, 0.5f, 0.75f};
     const std::array<EngineEvent, 2> events{{
         {EngineEventType::noteOn, 0, 1, 60, 0.8f},
