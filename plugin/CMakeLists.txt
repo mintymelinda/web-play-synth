@@ -42,6 +42,7 @@ if(BUILD_TESTING)
         tests/PolySynthEngineTest.cpp
         Source/Engine/PolySynthEngine.cpp
         Source/Engine/VoiceEngine.cpp
+        Source/Engine/PolySynthEngine.cpp
     )
     target_include_directories(WebPlaySynthPolySynthEngineTest PRIVATE Source)
     target_compile_features(WebPlaySynthPolySynthEngineTest PRIVATE cxx_std_17)
@@ -115,6 +116,7 @@ if(BUILD_TESTING)
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/Engine/VoiceEngine.cpp
+        Source/Engine/PolySynthEngine.cpp
     )
     target_link_libraries(WebPlaySynthSmokeTest PRIVATE juce::juce_audio_utils juce::juce_dsp)
     add_test(NAME native-synth-smoke COMMAND WebPlaySynthSmokeTest)

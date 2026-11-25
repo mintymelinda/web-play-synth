@@ -8,7 +8,112 @@
 
 namespace {
 juce::StringArray waveNames() { return { "Sine", "Triangle", "Saw", "Square" }; }
+
+class JuceMidiEventSource final : public webplaysynth::engine::IEngineEventSource {
+public:
+    JuceMidiEventSource(const juce::MidiBuffer& midi, int blockFrames)
+        : iterator(midi), frames(blockFrames)
+    {
+        juce::MidiBuffer::Iterator counter(midi);
+        juce::MidiMessage message;
+        int samplePosition = 0;
+        while (counter.getNextEvent(message, samplePosition)) {
+            webplaysynth::engine::EngineEvent event;
+            if (convert(message, samplePosition, event, frames))
+                ++count;
+        }
+        rewind();
+    }
+
+    void rewind() noexcept override
+    {
+        iterator.setNextSamplePosition(0);
+    }
+
+    bool next(webplaysynth::engine::EngineEvent& event) noexcept override
+    {
+        juce::MidiMessage message;
+        int samplePosition = 0;
+        while (iterator.getNextEvent(message, samplePosition)) {
+            if (convert(message, samplePosition, event, frames))
+                return true;
+        }
+        return false;
+    }
+
+    std::uint32_t eventCount() const noexcept { return count; }
+
+private:
+    static bool convert(const juce::MidiMessage& message, int samplePosition,
+                        webplaysynth::engine::EngineEvent& event, int blockFrames) noexcept
+    {
+        using webplaysynth::engine::EngineEventType;
+        const auto channel = juce::jlimit(1, 16, message.getChannel());
+        event.channel = static_cast<std::uint8_t>(channel);
+        event.frameOffset = static_cast<std::uint32_t>(
+            juce::jlimit(0, blockFrames, samplePosition));
+
+        if (message.isNoteOn(true)) {
+            event.type = EngineEventType::noteOn;
+            event.note = static_cast<std::uint8_t>(message.getNoteNumber());
+            event.value = message.getFloatVelocity();
+            return true;
+        }
+        if (message.isNoteOff()) {
+            event.type = EngineEventType::noteOff;
+            event.note = static_cast<std::uint8_t>(message.getNoteNumber());
+            event.value = 0.0f;
+            return true;
+        }
+        if (message.isPitchWheel()) {
+            event.type = EngineEventType::pitchBend;
+            event.value = (static_cast<float>(message.getPitchWheelValue()) - 8192.0f)
+                / 8192.0f;
+            return true;
+        }
+        if (message.isChannelPressure()) {
+            event.type = EngineEventType::channelPressure;
+            event.value = static_cast<float>(message.getChannelPressureValue()) / 127.0f;
+            return true;
+        }
+        if (message.isAftertouch()) {
+            event.type = EngineEventType::polyphonicKeyPressure;
+            event.note = static_cast<std::uint8_t>(message.getNoteNumber());
+            event.value = static_cast<float>(message.getAfterTouchValue()) / 127.0f;
+            return true;
+        }
+        if (message.isController()) {
+            const auto cc = message.getControllerNumber();
+            if (cc == 64) {
+                event.type = EngineEventType::sustainPedal;
+                event.value = message.getControllerValue() >= 64 ? 1.0f : 0.0f;
+                return true;
+            }
+            if (cc == 120) {
+                event.type = EngineEventType::allSoundOff;
+                event.value = 0.0f;
+                return true;
+            }
+            if (cc == 121) {
+                event.type = EngineEventType::resetControllers;
+                event.value = 0.0f;
+                return true;
+            }
+            if (cc == 123) {
+                event.type = EngineEventType::allNotesOff;
+                event.value = 0.0f;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    juce::MidiBuffer::Iterator iterator;
+    int frames = 0;
+    std::uint32_t count = 0;
+};
 }
+
 
 const juce::StringArray& WebPlaySynthAudioProcessor::midiCcParameterIds()
 {
@@ -204,30 +309,34 @@ double WebPlaySynthAudioProcessor::getTailLengthSeconds() const
     return tailSeconds;
 }
 
-void WebPlaySynthAudioProcessor::prepareToPlay(double sr,int)
+void WebPlaySynthAudioProcessor::prepareToPlay(double sr, int maximumExpectedSamplesPerBlock)
 {
-    currentSampleRate=sr; lastPlayedFrequency=0;
-    for(auto& v:voices) v.prepare(sr);
+    currentSampleRate = sr;
+    const auto outputChannels = juce::jlimit(1, 2, getTotalNumOutputChannels());
+    engine.prepare({
+        sr,
+        static_cast<std::uint32_t>(juce::jmax(1, maximumExpectedSamplesPerBlock)),
+        0,
+        static_cast<std::uint32_t>(outputChannels)
+    });
+
     // Set the parameter targets before setSampleRate() resets JUCE's smoothers,
     // so the first dry block starts at unity instead of ramping from JUCE's
     // constructor default gain.
     webplaysynth::dsp::StereoReverb::Parameters initialReverbParameters;
-    initialReverbParameters.roomSize=parameters.getRawParameterValue("reverbRoom")->load();
-    initialReverbParameters.damping=parameters.getRawParameterValue("reverbDamping")->load();
-    initialReverbParameters.wetLevel=parameters.getRawParameterValue("reverbMix")->load();
-    initialReverbParameters.dryLevel=0.5f*(1.0f-initialReverbParameters.wetLevel);
-    initialReverbParameters.width=1.0f;
-    initialReverbParameters.freezeMode=0.0f;
+    initialReverbParameters.roomSize = parameters.getRawParameterValue("reverbRoom")->load();
+    initialReverbParameters.damping = parameters.getRawParameterValue("reverbDamping")->load();
+    initialReverbParameters.wetLevel = parameters.getRawParameterValue("reverbMix")->load();
+    initialReverbParameters.dryLevel = 0.5f * (1.0f - initialReverbParameters.wetLevel);
+    initialReverbParameters.width = 1.0f;
+    initialReverbParameters.freezeMode = 0.0f;
     reverb.prepare(sr, initialReverbParameters);
     chorus.prepare(sr);
     delay.prepare(sr);
 }
 void WebPlaySynthAudioProcessor::releaseResources()
 {
-    for(auto& v:voices) { v.active=false; v.keyDown=false; v.sustainHeld=false; }
-    channelPitchBendSemitones.fill(0.0f);
-    channelAftertouch.fill(0.0f);
-    sustainPedalDown.fill(false);
+    engine.release();
     reverb.reset();
     chorus.reset();
     delay.reset();
@@ -286,7 +395,7 @@ WebPlaySynthAudioProcessor::Parameters WebPlaySynthAudioProcessor::readParameter
     }
     return p;
 }
-void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& midi)
+void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals guard;
 
@@ -311,15 +420,50 @@ void WebPlaySynthAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::
     output.clear();
 
     const auto p = readParameters();
-    int pos = 0;
-    for (const auto meta : midi) {
-        const auto at = juce::jlimit(pos, output.getNumSamples(), meta.samplePosition);
-        renderRange(output, pos, at, p);
-        handleMidiMessage(meta.getMessage(), p);
-        pos = at;
-    }
-    renderRange(output, pos, output.getNumSamples(), p);
-    processEffects(output,p);
+    // MIDI CC learn remains a JUCE/APVTS host concern. The portable engine
+    // receives the performance events through the streaming event view.
+    for (const auto metadata : midi)
+        handleMidiMessage(metadata.getMessage(), p);
+
+    const std::array<float, webplaysynth::engine::synthParameterCount> values {{
+        static_cast<float>(p.osc1Wave), static_cast<float>(p.osc2Wave),
+        p.osc1Octave, p.osc1Tune, p.osc1Level, p.osc1PulseWidth,
+        p.osc2Octave, p.osc2Tune, p.osc2Level, p.osc2PulseWidth,
+        p.hardSync ? 1.0f : 0.0f, p.crossMod,
+        p.cutoff, p.resonance, p.filterContour, static_cast<float>(p.filterType),
+        p.filterDrive, p.aftertouchDepth,
+        p.filterAttack, p.filterDecay, p.filterSustain, p.filterRelease,
+        p.ampAttack, p.ampDecay, p.ampSustain, p.ampRelease,
+        static_cast<float>(p.lfoWave), p.lfoRate, p.lfoPitchDepth, p.lfoFilterDepth,
+        p.lfoAmpDepth, p.lfoPanDepth, p.lfoPulseDepth,
+        p.master, static_cast<float>(p.unisonVoices), p.unisonDetune, p.stereoSpread,
+        p.chorusRate, p.chorusDepth, p.chorusMix, p.delayTime, p.delayFeedback, p.delayMix,
+        p.reverbMix, p.reverbRoom, p.reverbDamping, p.glideEnabled ? 1.0f : 0.0f,
+        p.glideTime, p.vco1Enabled ? 1.0f : 0.0f, p.vco2Enabled ? 1.0f : 0.0f,
+        p.filterEnvEnabled ? 1.0f : 0.0f, p.ampEnvEnabled ? 1.0f : 0.0f
+    }};
+    static_assert(webplaysynth::engine::synthParameterCount == 52,
+        "update the JUCE snapshot mapping when the portable parameter schema changes");
+
+    std::array<float*, webplaysynth::engine::maximumAudioChannels> outputChannels {};
+    for (int channel = 0; channel < output.getNumChannels(); ++channel)
+        outputChannels[static_cast<std::size_t>(channel)] = output.getWritePointer(channel);
+
+    JuceMidiEventSource eventSource(midi, output.getNumSamples());
+    const auto frameCount = static_cast<std::uint32_t>(output.getNumSamples());
+    webplaysynth::engine::EngineProcessBlock engineBlock {
+        { nullptr, 0, 0 },
+        { outputChannels.data(), static_cast<std::uint32_t>(output.getNumChannels()), frameCount },
+        { nullptr, eventSource.eventCount(), &eventSource },
+        { values.data(), static_cast<std::uint32_t>(values.size()),
+            webplaysynth::engine::parameterSchemaVersion, 0 },
+        { nullptr, 0, frameCount }
+    };
+    const auto status = engine.process(engineBlock);
+    if (status != webplaysynth::engine::EngineStatus::ok)
+        output.clear();
+
+    processEffects(output, p);
     output.applyGain(p.master);
 }
 
@@ -359,148 +503,35 @@ void WebPlaySynthAudioProcessor::processEffects(juce::AudioBuffer<float>& output
         reverb.processMono(output.getWritePointer(0),sampleCount);
 }
 
-void WebPlaySynthAudioProcessor::renderRange(juce::AudioBuffer<float>& b,int start,int end,const Parameters& p)
+void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& message,
+                                                           const Parameters&)
 {
-    for(int i=start;i<end;++i) {
-        float left=0.0f, right=0.0f;
-        for(auto& voice:voices) {
-            float voiceLeft=0.0f, voiceRight=0.0f;
-            voice.render(p,currentSampleRate,voiceLeft,voiceRight);
-            left+=voiceLeft;
-            right+=voiceRight;
-        }
-        if (b.getNumChannels() == 1)
-            b.addSample(0,i,(left+right)*0.5f);
-        else {
-            b.addSample(0,i,left);
-            b.addSample(1,i,right);
-        }
-    }
-}
-void WebPlaySynthAudioProcessor::handleMidiMessage(const juce::MidiMessage& m,const Parameters& p)
-{
-    if (m.isController()) {
-        const auto cc = m.getControllerNumber();
-        const auto channel = juce::jlimit(1, 16, m.getChannel());
-        const auto channelIndex = static_cast<size_t>(channel - 1);
-        // Channel-mode messages are handled as performance semantics,
-        // before the generic user CC mapping layer.
-        if (cc == 120) {
-            for (auto& voice : voices) {
-                if (voice.active && voice.midiChannel == channel) {
-                    voice.active=false;
-                    voice.keyDown=false;
-                    voice.sustainHeld=false;
-                    voice.ampEnvelope.reset();
-                    voice.filterEnvelope.reset();
-                    voice.note=-1;
-                }
-            }
-            return;
-        }
-        if (cc == 123) {
-            for (auto& voice : voices) {
-                if (voice.active && voice.midiChannel == channel && voice.keyDown) {
-                    voice.keyDown=false;
-                    if (sustainPedalDown[channelIndex])
-                        voice.sustainHeld=true;
-                    else
-                        voice.release();
-                }
-            }
-            return;
-        }
-        if (cc == 121) {
-            sustainPedalDown[channelIndex]=false;
-            channelPitchBendSemitones[channelIndex]=0.0f;
-            channelAftertouch[channelIndex]=0.0f;
-            for (auto& voice : voices) {
-                if (voice.active && voice.midiChannel == channel) {
-                    voice.targetFrequency=juce::MidiMessage::getMidiNoteInHertz(voice.note);
-                    voice.pitchBendSemitones=0.0f;
-                    voice.aftertouch=0.0f;
-                    if (voice.sustainHeld)
-                        voice.release();
-                }
-            }
-            return;
-        }
+    if (!message.isController())
+        return;
 
-        // Sustain is a channel performance controller, independent of the
-        // optional user CC-to-parameter mapping table.
-        if (cc == 64) {
-            const auto pedalDown = m.getControllerValue() >= 64;
-            const auto wasDown = sustainPedalDown[channelIndex];
-            sustainPedalDown[channelIndex] = pedalDown;
-            if (wasDown && !pedalDown) {
-                for (auto& voice : voices) {
-                    if (voice.active && voice.midiChannel == channel && voice.sustainHeld)
-                        voice.release();
-                }
-            }
-        }
+    const auto cc = message.getControllerNumber();
+    // These channel-mode messages are consumed by the portable engine and
+    // must not be intercepted by the user CC learn/mapping layer.
+    if (cc == 120 || cc == 121 || cc == 123)
+        return;
 
-        const auto learnTarget = midiCcLearnTarget.exchange(-1);
-        if (learnTarget >= 0 && learnTarget < midiCcParameterIds().size()) {
-            for (auto& assignment : midiCcToParameter)
-                if (assignment.load() == learnTarget)
-                    assignment.store(-1);
-            midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
-            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
-                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
-            return;
-        }
-
-        const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
-        if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size()) {
-            if (auto* parameter = parameters.getParameter(midiCcParameterIds()[parameterIndex]))
-                parameter->setValueNotifyingHost(static_cast<float>(m.getControllerValue()) / 127.0f);
-        }
+    const auto learnTarget = midiCcLearnTarget.exchange(-1);
+    if (learnTarget >= 0 && learnTarget < midiCcParameterIds().size()) {
+        for (auto& assignment : midiCcToParameter)
+            if (assignment.load() == learnTarget)
+                assignment.store(-1);
+        midiCcToParameter[static_cast<size_t>(cc)].store(learnTarget);
+        if (auto* parameter = parameters.getParameter(midiCcParameterIds()[learnTarget]))
+            parameter->setValueNotifyingHost(
+                static_cast<float>(message.getControllerValue()) / 127.0f);
         return;
     }
 
-    if (m.isChannelPressure()) {
-        const auto channel = juce::jlimit(1, 16, m.getChannel());
-        const auto pressure = static_cast<float>(m.getChannelPressureValue()) / 127.0f;
-        channelAftertouch[static_cast<size_t>(channel - 1)] = pressure;
-        for (auto& voice : voices)
-            if (voice.active && voice.midiChannel == channel)
-                voice.aftertouch = pressure;
-        return;
-    }
-
-    if (m.isAftertouch()) {
-        const auto channel = juce::jlimit(1, 16, m.getChannel());
-        const auto pressure = static_cast<float>(m.getAfterTouchValue()) / 127.0f;
-        for (auto& voice : voices)
-            if (voice.active && voice.midiChannel == channel && voice.note == m.getNoteNumber())
-                voice.aftertouch = pressure;
-        return;
-    }
-
-    if (m.isPitchWheel()) {
-        const auto channel = juce::jlimit(1, 16, m.getChannel());
-        const auto channelIndex = static_cast<size_t>(channel - 1);
-        const auto bend = (static_cast<float>(m.getPitchWheelValue()) - 8192.0f) / 8192.0f * 2.0f;
-        channelPitchBendSemitones[channelIndex] = bend;
-        for (auto& voice : voices) {
-            if (voice.active && voice.midiChannel == channel) {
-                voice.pitchBendSemitones = bend;
-                voice.targetFrequency = juce::MidiMessage::getMidiNoteInHertz(voice.note)
-                    * std::pow(2.0, static_cast<double>(bend) / 12.0);
-            }
-        }
-        return;
-    }
-
-    if (m.isNoteOn())
-        startNote(m.getNoteNumber(), m.getFloatVelocity(), m.getChannel(), p);
-    else if (m.isNoteOff())
-        stopNote(m.getNoteNumber(), m.getChannel());
-    else if (m.isAllNotesOff() || m.isAllSoundOff()) {
-        for (auto& voice : voices)
-            if (voice.active && voice.midiChannel == m.getChannel())
-                voice.stop();
+    const auto parameterIndex = midiCcToParameter[static_cast<size_t>(cc)].load();
+    if (parameterIndex >= 0 && parameterIndex < midiCcParameterIds().size()) {
+        if (auto* parameter = parameters.getParameter(midiCcParameterIds()[parameterIndex]))
+            parameter->setValueNotifyingHost(
+                static_cast<float>(message.getControllerValue()) / 127.0f);
     }
 }
 
@@ -535,35 +566,6 @@ juce::String WebPlaySynthAudioProcessor::getMidiCcMappingForParameter(const juce
             return juce::String(cc);
 
     return {};
-}
-WebPlaySynthAudioProcessor::Voice* WebPlaySynthAudioProcessor::findVoiceToStart()
-{
-    for(auto& v:voices) if(!v.active) return &v;
-    auto* oldest=&voices.front(); for(auto& v:voices) if(v.age<oldest->age) oldest=&v; return oldest;
-}
-void WebPlaySynthAudioProcessor::startNote(int n, float vel, int channel, const Parameters& p)
-{
-    const auto safeChannel = juce::jlimit(1, 16, channel);
-    const auto bend = channelPitchBendSemitones[static_cast<size_t>(safeChannel - 1)];
-    auto* voice = findVoiceToStart();
-    voice->age=++voiceAge;
-    voice->start(n, vel, safeChannel, bend,
-        channelAftertouch[static_cast<size_t>(safeChannel - 1)], p, lastPlayedFrequency);
-    lastPlayedFrequency=juce::MidiMessage::getMidiNoteInHertz(n);
-}
-void WebPlaySynthAudioProcessor::stopNote(int n, int channel)
-{
-    const auto safeChannel = juce::jlimit(1, 16, channel);
-    const auto pedalDown = sustainPedalDown[static_cast<size_t>(safeChannel - 1)];
-    for (auto& voice : voices) {
-        if (voice.active && voice.note == n && voice.midiChannel == safeChannel && voice.keyDown) {
-            voice.keyDown=false;
-            if (pedalDown)
-                voice.sustainHeld=true;
-            else
-                voice.release();
-        }
-    }
 }
 juce::AudioProcessorEditor* WebPlaySynthAudioProcessor::createEditor() { return new WebPlaySynthAudioProcessorEditor(*this); }
 void WebPlaySynthAudioProcessor::getStateInformation(juce::MemoryBlock& dest)

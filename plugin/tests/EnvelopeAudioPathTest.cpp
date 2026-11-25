@@ -10,18 +10,18 @@ struct WebPlaySynthAudioProcessorTestAccess
 {
     static int activeVoiceCount(const WebPlaySynthAudioProcessor& processor)
     {
-        return static_cast<int>(std::count_if(processor.voices.begin(), processor.voices.end(),
+        return static_cast<int>(std::count_if(processor.engine.voices.begin(), processor.engine.voices.end(),
             [](const auto& voice) { return voice.active; }));
     }
 
     static float ampEnvelopeValue(WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].ampEnvelope.getNextSample();
+        return processor.engine.voices[0].ampEnvelope.getNextSample();
     }
 
     static float filterEnvelopeValue(WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].filterEnvelope.getNextSample();
+        return processor.engine.voices[0].filterEnvelope.getNextSample();
     }
 };
 

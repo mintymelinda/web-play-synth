@@ -85,8 +85,9 @@ enum class EngineEventType : std::uint8_t {
 // value is velocity [0, 1] for noteOn, normalized bend [-1, 1] for pitchBend,
 // pressure [0, 1] for pressure events, and pedal state [0, 1] for sustainPedal.
 // channel is MIDI's 1-based channel number. note is used by note and poly
-// pressure events. Event arrays are consumed in supplied order; equal-offset
-// events are never reordered by the engine.
+// pressure events. frameOffset may equal blockFrames: such an event is applied
+// after the final sample, ready for the next block. Events are consumed in
+// supplied order; equal-offset events are never reordered by the engine.
 struct EngineEvent {
     EngineEventType type = EngineEventType::noteOn;
     std::uint32_t frameOffset = 0;
@@ -96,7 +97,7 @@ struct EngineEvent {
 
     bool isValid(std::uint32_t blockFrames) const noexcept
     {
-        if (frameOffset >= blockFrames || channel == 0 || channel > maximumMidiChannel
+        if (frameOffset > blockFrames || channel == 0 || channel > maximumMidiChannel
             || !std::isfinite(value))
             return false;
 
@@ -121,17 +122,44 @@ struct EngineEvent {
     }
 };
 
+// Optional streaming event source lets host adapters expose large MIDI blocks
+// without allocating or imposing an arbitrary event-count ceiling in the audio
+// callback. rewind() must be deterministic and next() must not allocate.
+class IEngineEventSource {
+public:
+    virtual ~IEngineEventSource() = default;
+    virtual void rewind() noexcept = 0;
+    virtual bool next(EngineEvent& event) noexcept = 0;
+};
+
 struct EngineEventView {
     const EngineEvent* events = nullptr;
     std::uint32_t eventCount = 0;
+    IEngineEventSource* source = nullptr;
 
     bool isValid(std::uint32_t blockFrames) const noexcept
     {
         if (eventCount == 0)
             return true;
-        if (events == nullptr || blockFrames == 0)
+        if (source == nullptr && events == nullptr)
             return false;
+
         std::uint32_t previousOffset = 0;
+        if (source != nullptr) {
+            source->rewind();
+            for (std::uint32_t i = 0; i < eventCount; ++i) {
+                EngineEvent event;
+                if (!source->next(event) || !event.isValid(blockFrames)
+                    || (i > 0 && event.frameOffset < previousOffset)) {
+                    source->rewind();
+                    return false;
+                }
+                previousOffset = event.frameOffset;
+            }
+            source->rewind();
+            return true;
+        }
+
         for (std::uint32_t i = 0; i < eventCount; ++i) {
             if (!events[i].isValid(blockFrames)
                 || (i > 0 && events[i].frameOffset < previousOffset))

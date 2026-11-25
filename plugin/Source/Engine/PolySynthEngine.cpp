@@ -144,8 +144,16 @@ EngineStatus PolySynthEngine::process(const EngineProcessBlock& block) noexcept
         std::fill_n(block.output.channels[channel], block.output.frameCount, 0.0f);
 
     std::uint32_t cursor = 0;
+    if (block.events.source != nullptr)
+        block.events.source->rewind();
     for (std::uint32_t i = 0; i < block.events.eventCount; ++i) {
-        const auto& event = block.events.events[i];
+        EngineEvent event;
+        if (block.events.source != nullptr) {
+            if (!block.events.source->next(event))
+                return EngineStatus::invalidEvents;
+        } else {
+            event = block.events.events[i];
+        }
         if (event.frameOffset < cursor)
             return EngineStatus::invalidEvents;
         renderRange(block.output, cursor, event.frameOffset, parameters);

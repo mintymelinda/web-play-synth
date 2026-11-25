@@ -89,10 +89,14 @@ int main()
         "modulation frame count must match the audio block");
 
     auto invalidEvent = block;
-    const EngineEvent outOfRange{EngineEventType::noteOn, 16, 1, 60, 0.8f};
+    const EngineEvent boundaryEvent{EngineEventType::noteOn, 16, 1, 60, 0.8f};
+    invalidEvent.events = {&boundaryEvent, 1};
+    require(invalidEvent.isValid(spec),
+        "events at the block boundary must be retained for the next block");
+    const EngineEvent outOfRange{EngineEventType::noteOn, 17, 1, 60, 0.8f};
     invalidEvent.events = {&outOfRange, 1};
     require(!invalidEvent.isValid(spec),
-        "events at the block boundary must be rejected");
+        "events beyond the block boundary must be rejected");
 
     auto invalidSchema = block;
     invalidSchema.parameters.schemaVersion = parameterSchemaVersion + 1;

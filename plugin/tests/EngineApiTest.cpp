@@ -16,6 +16,24 @@ void require(bool condition, const char* message)
 }
 }
 
+class ArrayEventSource final : public webplaysynth::engine::IEngineEventSource {
+public:
+    ArrayEventSource(const webplaysynth::engine::EngineEvent* values,
+                     std::uint32_t size) noexcept : events(values), count(size) {}
+    void rewind() noexcept override { position = 0; }
+    bool next(webplaysynth::engine::EngineEvent& event) noexcept override
+    {
+        if (position >= count)
+            return false;
+        event = events[position++];
+        return true;
+    }
+private:
+    const webplaysynth::engine::EngineEvent* events;
+    std::uint32_t count;
+    std::uint32_t position = 0;
+};
+
 int main()
 {
     using namespace webplaysynth::engine;
@@ -62,8 +80,10 @@ int main()
         "MIDI channel zero must be rejected");
     require(EngineEvent{EngineEventType::pitchBend, 0, 1, 0, 1.01f}.isValid(8) == false,
         "out-of-range pitch bend must be rejected");
-    require(EngineEvent{EngineEventType::noteOff, 8, 1, 60, 0.0f}.isValid(8) == false,
-        "event at block end must be rejected instead of deferred ambiguously");
+    require(EngineEvent{EngineEventType::noteOff, 8, 1, 60, 0.0f}.isValid(8),
+        "event at block end must be accepted for application before the next block");
+    require(EngineEvent{EngineEventType::noteOff, 9, 1, 60, 0.0f}.isValid(8) == false,
+        "events beyond the block end must be rejected");
     require(EngineEvent{EngineEventType::channelPressure, 0, 1, 0,
         std::numeric_limits<float>::quiet_NaN()}.isValid(8) == false,
         "non-finite event values must be rejected");
@@ -75,6 +95,11 @@ int main()
     }};
     require(EngineEventView{orderedEvents.data(), 3}.isValid(8),
         "valid ordered event view must be accepted");
+    ArrayEventSource streamedEvents(orderedEvents.data(), 3);
+    require(EngineEventView{nullptr, 3, &streamedEvents}.isValid(8),
+        "streamed event source must validate without a contiguous event array");
+    require(EngineEventView{nullptr, 3, &streamedEvents}.isValid(8),
+        "streamed event source validation must rewind deterministically");
     require(EngineEventView{nullptr, 1}.isValid(8) == false,
         "non-empty event view with null storage must be rejected");
     require(EngineEventView{orderedEvents.data(), 3}.isValid(0) == false,

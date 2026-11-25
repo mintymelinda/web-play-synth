@@ -1,5 +1,7 @@
 #pragma once
 
+struct WebPlaySynthAudioProcessorTestAccess;
+
 #include "EngineApi.h"
 #include "VoiceEngine.h"
 
@@ -36,6 +38,7 @@ public:
     bool isPrepared() const noexcept override { return prepared; }
 
 private:
+    friend struct ::WebPlaySynthAudioProcessorTestAccess;
     static bool decodeParameters(const ParameterSnapshotView& snapshot,
                                  double sampleRate, SynthParameters& result) noexcept;
     void renderRange(const AudioBlockView& output, std::uint32_t start,

@@ -11,23 +11,22 @@ struct WebPlaySynthAudioProcessorTestAccess
 {
     static int activeVoiceCount(const WebPlaySynthAudioProcessor& processor)
     {
-        return static_cast<int>(std::count_if(processor.voices.begin(), processor.voices.end(),
-            [](const auto& voice) { return voice.active; }));
+        return static_cast<int>(static_cast<std::uint32_t>(std::count_if(processor.engine.voices.begin(), processor.engine.voices.end(), [](const auto& voice) { return voice.active; })));
     }
 
     static bool firstVoiceSustainHeld(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].sustainHeld;
+        return processor.engine.voices[0].sustainHeld;
     }
 
     static bool firstVoiceAmpEnvelopeActive(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].ampEnvelope.isActive();
+        return processor.engine.voices[0].ampEnvelope.isActive();
     }
 
     static bool sustainPedalDown(const WebPlaySynthAudioProcessor& processor, int channel)
     {
-        return processor.sustainPedalDown[static_cast<size_t>(channel - 1)];
+        return processor.engine.sustainPedalDown[static_cast<std::size_t>(channel - 1)];
     }
 };
 

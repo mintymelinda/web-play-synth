@@ -1,6 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
-#include "Engine/VoiceEngine.h"
+#include "Engine/PolySynthEngine.h"
 #include "Dsp/Delay.h"
 #include "Dsp/Chorus.h"
 #include "Dsp/Reverb.h"
@@ -52,23 +52,14 @@ private:
     std::atomic<float> pitchInputRms { 0.0f };
     std::atomic<int> currentProgram { 0 };
     using Parameters = webplaysynth::engine::SynthParameters;
-    using Voice = webplaysynth::engine::Voice;
     static ParameterState::ParameterLayout createParameterLayout();
     Parameters readParameters() const;
-    void renderRange(juce::AudioBuffer<float>& buffer, int start, int end, const Parameters& p);
     void processEffects(juce::AudioBuffer<float>& output, const Parameters& p);
     void handleMidiMessage(const juce::MidiMessage& message, const Parameters& p);
-    Voice* findVoiceToStart();
-    void startNote(int note, float velocity, int channel, const Parameters& p);
-    void stopNote(int note, int channel);
-    std::array<float, 16> channelPitchBendSemitones {};
-    std::array<float, 16> channelAftertouch {};
-    std::array<bool, 16> sustainPedalDown {};
-    std::array<Voice,16> voices;
+    webplaysynth::engine::PolySynthEngine engine;
     webplaysynth::dsp::StereoReverb reverb;
     webplaysynth::dsp::StereoChorus chorus;
     webplaysynth::dsp::StereoDelay delay;
-    double currentSampleRate=44100, lastPlayedFrequency=0;
-    int voiceAge=0;
+    double currentSampleRate=44100;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebPlaySynthAudioProcessor)
 };
