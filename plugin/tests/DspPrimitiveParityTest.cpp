@@ -14,23 +14,23 @@
 struct WebPlaySynthAudioProcessorTestAccess {
     static double voiceLfoPhase(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].lfoOscillator.getPhase();
+        return processor.engine.voices[0].lfoOscillator.getPhase();
     }
 
     static double voiceOscillatorPhase(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].phase1[0];
+        return processor.engine.voices[0].phase1[0];
     }
 
     static double voiceFrequency(const WebPlaySynthAudioProcessor& processor)
     {
-        return processor.voices[0].currentFrequency;
+        return processor.engine.voices[0].currentFrequency;
     }
 
     static int activeVoiceCount(const WebPlaySynthAudioProcessor& processor)
     {
         int count = 0;
-        for (const auto& voice : processor.voices)
+        for (const auto& voice : processor.engine.voices)
             if (voice.active)
                 ++count;
         return count;
@@ -40,14 +40,14 @@ struct WebPlaySynthAudioProcessorTestAccess {
     {
         processor.prepareToPlay(48000.0, 128);
         const auto parameters = processor.readParameters();
-        processor.voices[0].start(69, velocity, 1, 0.0f, 0.0f, parameters, 0.0);
+        processor.engine.voices[0].start(69, velocity, 1, 0.0f, 0.0f, parameters, 0.0);
     }
 
     static void renderDirectVoiceSample(WebPlaySynthAudioProcessor& processor,
         float& left, float& right, float& oscillatorLeft, float& oscillatorRight)
     {
         const auto parameters = processor.readParameters();
-        processor.voices[0].render(parameters, 48000.0, left, right,
+        processor.engine.voices[0].render(parameters, 48000.0, left, right,
             &oscillatorLeft, &oscillatorRight);
     }
 
@@ -55,7 +55,7 @@ struct WebPlaySynthAudioProcessorTestAccess {
         float& left, float& right, float& oscillatorLeft, float& oscillatorRight)
     {
         const auto parameters = processor.readParameters();
-        auto& voice = processor.voices[0];
+        auto& voice = processor.engine.voices[0];
         if (noteOff)
             voice.stop();
         voice.render(parameters, 48000.0, left, right, &oscillatorLeft, &oscillatorRight);
