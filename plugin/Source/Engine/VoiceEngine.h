@@ -7,6 +7,7 @@
 #include "Dsp/TptFilter.h"
 
 #include <array>
+#include <cmath>
 
 namespace webplaysynth::engine {
 
