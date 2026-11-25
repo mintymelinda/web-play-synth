@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The portable DSP primitives are now independent of JUCE, but the plugin still owns
-voice allocation, note lifecycle, parameter snapshots, modulation routing, and the
-top-level render loop. This document defines the boundary those responsibilities
+The portable DSP primitives are independent of JUCE, but the plugin still owns
+voice allocation, note lifecycle, parameter snapshots, modulation routing, and
+the top-level render loop. This document defines the boundary those responsibilities
 will move behind before the same engine is hosted by the VST3 and WebAssembly.
 
 The native JUCE processor remains the behavioral reference during this work. This
@@ -52,71 +52,77 @@ The engine has an explicit lifecycle:
 7. `release()` returns the engine to the inert state and may release storage. It
    is not called from the real-time callback.
 
-Processing before `prepare`, processing with null/invalid views, zero-frame blocks,
-and blocks larger than the prepared maximum must have explicit, tested behavior.
-The chosen behavior must never read or write outside the supplied buffers.
+The API types and their validation rules are implemented in
+`plugin/Source/Engine/EngineApi.h`. They are deliberately separate from the
+JUCE processor; this step does not yet move rendering or change runtime behavior.
 
-## Proposed framework-neutral types
+## Framework-neutral types
 
-The public boundary should use fixed-width integer types, plain structs, enums,
-and non-owning pointer/length views. It must not expose JUCE types, STL containers
-whose allocation is implicit in processing, exceptions, or host-owned objects.
+The public boundary uses fixed-width integer types, plain structs, enums, and
+non-owning pointer/length views. It does not expose JUCE types, owning containers,
+exceptions, or host-owned objects.
 
 ### Process specification
 
-`ProcessSpec` carries:
+`ProcessSpec` carries sample rate in Hz, maximum expected frames per call,
+and input/output channel counts. It accepts finite positive sample rates,
+a non-zero maximum block size, zero to two input channels, and one or two
+output channels. The initial engine supports mono and stereo output.
 
-- sample rate in Hz;
-- maximum expected frames per call;
-- supported input and output channel counts.
+### Audio blocks
 
-Only mono and stereo output are required initially. Optional mono pitch input is
-a host-routing feature and is not implicitly connected to the synth output.
+`AudioBlockView` is a non-owning planar float output view. It requires one or
+two channels; for non-empty blocks, the channel table and every channel pointer
+must be non-null. Zero-frame output views are valid without backing sample
+pointers. Output uses replacing semantics.
 
-### Audio block
+`ConstAudioBlockView` is the corresponding read-only input view. A zero-channel
+input is valid and represents no connected input. Input must not alias output
+unless the adapter explicitly guarantees safe in-place operation.
 
-`AudioBlockView` is a non-owning view of planar float channels, frame count, and
-channel count. The engine must document whether output is additive or replacing;
-the initial adapter should use replacing semantics so a host can provide cleared
-output buffers. Input views are read-only and must never alias writes unless the
-adapter explicitly guarantees safe in-place operation.
+The engine must reject blocks larger than the prepared maximum and must never
+read or write outside the supplied frame/channel extents.
 
 ### Events
 
-`EngineEvent` is a compact tagged event with a frame offset and stable ordering.
-The initial event set is:
+`EngineEvent` is a compact tagged event with a frame offset, 1-based MIDI
+channel, note number, and scalar value. The initial event set is note on/off,
+pitch bend, channel pressure, polyphonic key pressure, sustain pedal, all notes
+off, all sound off, and reset controllers.
 
-- note on (note number, velocity, channel);
-- note off (note number, channel);
-- pitch bend (channel, normalized bend);
-- channel pressure;
-- polyphonic key pressure;
-- sustain pedal;
-- all notes off / all sound off / reset controllers.
+The scalar is normalized: note velocity, pressure, and pedal state use [0, 1];
+pitch bend uses [-1, 1]. Note numbers are limited to 0-127 and channels to 1-16.
+An event offset must be strictly less than the block frame count. Invalid and
+non-finite event values are rejected, not silently clamped. An empty event view
+is valid; a non-empty view requires storage. Events are consumed in supplied
+array order, including when multiple events share an offset.
 
 The engine receives already-decoded events. MIDI byte parsing and CC-to-parameter
 mapping stay in the host adapter until there is a deliberate cross-host contract
-for them. Event offsets must be clamped or rejected deterministically; events at
-the same offset preserve their supplied order.
+for them.
 
 ### Parameters
 
-The engine accepts a plain, versioned parameter snapshot in native units. The
-host adapter remains responsible for mapping host parameter IDs/ranges to that
-snapshot. The snapshot must contain only user-controllable values; derived values
+`ParameterSnapshotView` carries a schema version, revision, and non-owning
+pointer/count pair of float values in engine-defined order and native units.
+Version 1 is the initial schema marker. A non-empty snapshot requires a non-null
+value pointer. The engine must reject unknown schema versions and consume/copy
+the view at a block boundary; it must not retain the caller's pointer.
+
+The host adapter remains responsible for mapping host parameter IDs/ranges to
+the snapshot. The snapshot contains only user-controllable values; derived values
 such as frequency ratios, glide coefficients, unison gains, and filter drive gain
 are computed by the engine from the snapshot and current process specification.
+Atomic publication and the concrete version-1 parameter ordering will be
+implemented alongside the engine that consumes this view; this type alone does
+not claim to provide thread-safe publication.
 
-A snapshot is applied atomically at a block boundary. No partial mixture of old
-and new values may be observed during a render call. Parameter changes must retain
-the existing smoothing and sample/block timing established by the native tests.
+### Status and reset
 
-### Modulation
-
-Modulation sources and destinations are engine behavior, not adapter behavior.
-LFO phase progression, sample-before-advance convention, depth scaling, clamping,
-and destination evaluation order remain in the engine. The adapter does not
-precompute or inject JUCE-specific modulation values.
+`EngineStatus` defines the outcomes needed by the eventual processing API:
+success, unprepared state, invalid specification or views, invalid events,
+unsupported block size, and incompatible parameter schema. `ResetMode` selects
+voices, effects, or all engine state.
 
 ## Determinism and test hooks
 
