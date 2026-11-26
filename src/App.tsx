@@ -534,7 +534,7 @@ export default function App() {
     <header className="topbar">
       <a className="brand" href="#"><span className="brand-mark"><AudioLines size={19} /></span><span>WEB PLAY <b>SYNTH</b></span></a>
       <div className="topbar-center"><span className="status-dot" /> VIRTUAL ANALOG SYSTEM <span className="topbar-divider">/</span> PATCH 001</div>
-      <div className="top-actions"><a className="download-link" href="https://github.com/mintymelinda/web-play-synth/releases" target="_blank" rel="noreferrer">VST3 DOWNLOADS</a><button className="icon-button" aria-label="Help" onClick={() => setShowHelp(!showHelp)}><CircleHelp size={18} /></button><button className={`power-button ${powered ? "is-on" : ""}`} onClick={async () => { if (!powered) { await engine.current.start(); setPowered(true); } else { sourceNotes.current.clear(); engine.current.allNotesOff(); setHeld([]); } }}><Power size={15} /> {powered ? "AUDIO READY" : "POWER ON"}</button></div>
+      <div className="top-actions"><a className="download-link" href="https://github.com/mintymelinda/web-play-synth/releases/latest/download/web-play-synth-windows-x86_64.zip">DOWNLOAD WINDOWS VST3</a><button className="icon-button" aria-label="Help" onClick={() => setShowHelp(!showHelp)}><CircleHelp size={18} /></button><button className={`power-button ${powered ? "is-on" : ""}`} onClick={async () => { if (!powered) { await engine.current.start(); setPowered(true); } else { sourceNotes.current.clear(); engine.current.allNotesOff(); setHeld([]); } }}><Power size={15} /> {powered ? "AUDIO READY" : "POWER ON"}</button></div>
     </header>
 
     <section className="hero">
