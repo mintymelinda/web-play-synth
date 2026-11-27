@@ -23,39 +23,30 @@ Install the `.vst3` bundle using your DAW's plugin installation instructions. Th
 
 ## Deploy with Docker
 
-The Nginx container is the permanent front door; application updates replace only versioned static files. Build and publish a release with:
+Docker Compose builds the complete application image, including the Emscripten
+WebAssembly engine, Vite browser app, and Nginx server. The running container
+therefore always serves the application built from the checked-out source.
 
-```sh
-bash scripts/deploy.sh
-```
-
-Open [http://localhost:4173](http://localhost:4173). Set `SYNTH_PORT` to change the host port.
-
-For a Synology deployment, configure the paths once in a local `.env` file in the project directory:
-
-```sh
-cp .env.example .env
-# Edit .env if your project or data directory differs.
-```
-
-Docker Compose reads this file automatically, and the deploy/rollback scripts load it too. It is git-ignored, so your NAS-specific paths stay on the NAS. After that, updates are simply:
+On the NAS, update the checkout and rebuild/recreate the app with:
 
 ```sh
 git pull --ff-only origin main
+docker compose up -d --build --force-recreate
+```
+
+This is the supported deployment cycle. No separate deploy script, host Node.js
+installation, release directory, or bind-mounted `data/current` directory is
+required. Docker Compose reads `.env` automatically; set `SYNTH_PORT` there
+if the default host port (`4173`) needs to change.
+
+To run the same deployment through the helper script:
+
+```sh
 bash scripts/deploy.sh
 ```
 
-The deploy script builds the app inside Docker (Node.js 22 is not required on the NAS host), stages the output, verifies the generated entry point and referenced assets, and smoke-tests it with Nginx. It then copies fingerprinted assets into a shared directory and atomically switches the `current` release symlink. The existing Nginx container is not restarted for normal application releases.
-
-Old hashed assets are intentionally retained. A browser tab that loaded the previous version can still request its original JavaScript and CSS after an update. The active `index.html` is served with no-cache headers so new visits discover the latest release.
-
-The previous release is retained for rollback:
-
-```sh
-bash scripts/rollback.sh
-```
-
-Do not delete files from the shared `assets` directory during routine deployments. The release directories and previous-release pointer are stored under `SYNTH_DATA_DIR` (default: `./data`).
+The helper executes the same build-and-recreate operation and also supports
+Synology's standalone `docker-compose` v1 command.
 
 ## Local development
 
