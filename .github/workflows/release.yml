@@ -1,4 +1,4 @@
-name: Native VST3 Release
+name: Windows VST3 Release
 
 on:
   push:
@@ -9,60 +9,17 @@ permissions:
 
 jobs:
   build:
-    name: Build and validate (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux-x86_64
-            os: ubuntu-latest
-            artifact: web-play-synth-linux-x86_64
-            archive: web-play-synth-linux-x86_64.tar.gz
-          - platform: windows-x86_64
-            os: windows-latest
-            artifact: web-play-synth-windows-x86_64
-            archive: web-play-synth-windows-x86_64.zip
-          - platform: macos-universal
-            os: macos-15
-            artifact: web-play-synth-macos-universal
-            archive: web-play-synth-macos-universal.tar.gz
-    runs-on: ${{ matrix.os }}
+    name: Build and validate (windows-x86_64)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install JUCE Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev \
-            libfreetype6-dev \
-            libfontconfig1-dev \
-            libx11-dev \
-            libxext-dev \
-            libxinerama-dev \
-            libxrandr-dev \
-            libxcursor-dev \
-            libgl1-mesa-dev \
-            xvfb
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
       - name: Configure native plugin and smoke tests
-        shell: bash
-        run: |
-          cmake_args=(
-            -S plugin
-            -B build/plugin
-            -DCMAKE_BUILD_TYPE=Release
-            -DBUILD_TESTING=ON
-          )
-          if [[ "${{ matrix.platform }}" == "macos-universal" ]]; then
-            cmake_args+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64")
-          fi
-          cmake "${cmake_args[@]}"
+        run: cmake -S plugin -B build/plugin -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 
       - name: Build VST3 and Standalone
         run: cmake --build build/plugin --config Release --parallel
@@ -71,168 +28,33 @@ jobs:
         run: ctest --test-dir build/plugin -C Release --output-on-failure
 
       - name: Verify plugin formats and target architecture
-        shell: bash
-        run: |
-          python scripts/verify_native_package.py \
-            --platform "${{ matrix.platform }}" \
-            --root "build/plugin/WebPlaySynth_artefacts/Release"
+        run: python scripts/verify_native_package.py --platform windows-x86_64 --root build/plugin/WebPlaySynth_artefacts/Release
 
-      - name: Download pluginval (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          curl --fail --location --retry 3 \
-            https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Linux.zip \
-            --output pluginval.zip
-          mkdir -p pluginval-bin
-          unzip -q pluginval.zip -d pluginval-bin
-          chmod +x pluginval-bin/pluginval
-
-      - name: Download pluginval (Windows)
-        if: runner.os == 'Windows'
+      - name: Download pluginval
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip -OutFile pluginval.zip
           Expand-Archive -Path pluginval.zip -DestinationPath pluginval-bin
 
-      - name: Download pluginval (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          curl --fail --location --retry 3 \
-            https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip \
-            --output pluginval.zip
-          mkdir -p pluginval-bin
-          unzip -q pluginval.zip -d pluginval-bin
-          chmod +x pluginval-bin/pluginval.app/Contents/MacOS/pluginval
-
-      - name: Validate VST3 with pluginval (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          xvfb-run --auto-servernum pluginval-bin/pluginval \
-            --validate-in-process --strictness-level 5 \
-            --validate "build/plugin/WebPlaySynth_artefacts/Release/VST3/Web Play Synth.vst3"
-
-      - name: Validate VST3 with pluginval (Windows)
-        if: runner.os == 'Windows'
+      - name: Validate VST3 with pluginval
         shell: cmd
-        run: |
-          pluginval-bin\pluginval.exe --validate-in-process --strictness-level 5 --validate "build\plugin\WebPlaySynth_artefacts\Release\VST3\Web Play Synth.vst3"
-
-      - name: Validate VST3 with pluginval (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          pluginval-bin/pluginval.app/Contents/MacOS/pluginval \
-            --validate-in-process --strictness-level 5 \
-            --validate "build/plugin/WebPlaySynth_artefacts/Release/VST3/Web Play Synth.vst3"
-
-      - name: Package Linux plugin and Standalone
-        if: runner.os == 'Linux'
-        run: |
-          tar -czf "${{ matrix.archive }}" \
-            -C build/plugin/WebPlaySynth_artefacts/Release VST3 Standalone
+        run: pluginval-bin\pluginval.exe --validate-in-process --strictness-level 5 --validate "build\plugin\WebPlaySynth_artefacts\Release\VST3\Web Play Synth.vst3"
 
       - name: Package Windows plugin and Standalone
-        if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          Compress-Archive -Path build/plugin/WebPlaySynth_artefacts/Release/VST3,build/plugin/WebPlaySynth_artefacts/Release/Standalone -DestinationPath "${{ matrix.archive }}"
+        run: Compress-Archive -Path build/plugin/WebPlaySynth_artefacts/Release/VST3,build/plugin/WebPlaySynth_artefacts/Release/Standalone -DestinationPath web-play-synth-windows-x86_64.zip
 
-      - name: Package universal macOS plugin and Standalone
-        if: runner.os == 'macOS'
-        run: |
-          tar -czf "${{ matrix.archive }}" \
-            -C build/plugin/WebPlaySynth_artefacts/Release VST3 Standalone
-
-      - name: Upload platform build
+      - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.archive }}
-          if-no-files-found: error
-          retention-days: 7
-
-  sign-and-notarize-macos:
-    name: Sign and notarize macOS package
-    needs: build
-    runs-on: macos-15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-play-synth-macos-universal
-          path: macos-package
-
-      - name: Require Apple signing and notarization credentials
-        env:
-          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          API_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-          API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
-          ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
-        run: |
-          for name in CERTIFICATE CERTIFICATE_PASSWORD API_KEY API_KEY_ID ISSUER_ID; do
-            if [[ -z "${!name}" ]]; then
-              echo "::error::Missing required GitHub secret/variable for macOS signing: $name"
-              exit 1
-            fi
-          done
-
-      - name: Import Developer ID certificate
-        uses: Apple-Actions/import-codesign-certs@v7
-        with:
-          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-
-      - name: Extract and sign macOS bundles
-        run: |
-          set -euo pipefail
-          mkdir -p macos-dist
-          archive="$(find macos-package -maxdepth 1 -name '*.tar.gz' -print -quit)"
-          test -n "$archive"
-          tar -xzf "$archive" -C macos-dist
-          identity="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application:/ { print $2; exit }')"
-          if [[ -z "$identity" ]]; then
-            echo "::error::No Developer ID Application identity was imported"
-            exit 1
-          fi
-          vst3="$(find macos-dist -type d -name '*.vst3' -print -quit)"
-          app="$(find macos-dist/Standalone -maxdepth 1 -type d -name '*.app' -print -quit)"
-          test -n "$vst3" && test -n "$app"
-          codesign --force --deep --options runtime --timestamp --sign "$identity" "$vst3"
-          codesign --force --deep --options runtime --timestamp --sign "$identity" "$app"
-          codesign --verify --deep --strict --verbose=2 "$vst3"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          mkdir -p release-macos
-          hdiutil create -volname "Web Play Synth" -srcfolder macos-dist -ov -format UDZO release-macos/Web-Play-Synth-macOS.dmg
-          codesign --force --timestamp --sign "$identity" release-macos/Web-Play-Synth-macOS.dmg
-
-      - name: Notarize and staple macOS disk image
-        uses: Apple-Actions/notarize@v1
-        with:
-          path: release-macos/Web-Play-Synth-macOS.dmg
-          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-          staple: true
-
-      - name: Verify stapled notarization ticket
-        run: |
-          xcrun stapler validate release-macos/Web-Play-Synth-macOS.dmg
-          spctl --assess --type open --context context:primary-signature --verbose=2 release-macos/Web-Play-Synth-macOS.dmg
-
-      - name: Upload signed and notarized macOS release asset
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-play-synth-macos-release
-          path: release-macos/Web-Play-Synth-macOS.dmg
+          name: web-play-synth-windows-x86_64
+          path: web-play-synth-windows-x86_64.zip
           if-no-files-found: error
           retention-days: 7
 
   publish-release:
-    name: Publish three-platform GitHub Release
-    needs: [build, sign-and-notarize-macos]
+    name: Publish Windows GitHub Release
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -246,26 +68,18 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Download release packages
+      - name: Download Windows package
         uses: actions/download-artifact@v4
         with:
+          name: web-play-synth-windows-x86_64
           path: release-assets
-          merge-multiple: true
 
-      - name: Verify exactly three platform downloads are present
-        run: |
-          set -euo pipefail
-          test -s release-assets/web-play-synth-linux-x86_64.tar.gz
-          test -s release-assets/web-play-synth-windows-x86_64.zip
-          test -s release-assets/Web-Play-Synth-macOS.dmg
-          find release-assets -maxdepth 1 -type f -print
+      - name: Verify Windows download is present
+        run: test -s release-assets/web-play-synth-windows-x86_64.zip
 
-      - name: Create GitHub Release and attach platform downloads
+      - name: Create GitHub Release and attach Windows download
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: |
-            release-assets/web-play-synth-linux-x86_64.tar.gz
-            release-assets/web-play-synth-windows-x86_64.zip
-            release-assets/Web-Play-Synth-macOS.dmg
+          files: release-assets/web-play-synth-windows-x86_64.zip
