@@ -542,6 +542,17 @@ export default function App() {
       <div className="hero-readout"><span>VOICE STATUS</span><strong>{activeCount ? `${activeCount.toString().padStart(2, "0")} ACTIVE` : "STANDBY"}</strong><small>{powered ? "AUDIO ENGINE RUNNING" : "AWAITING AUDIO ACTIVATION"}</small></div>
     </section>
 
+    <section className="plugin-download" aria-label="Download the Windows plugin">
+      <div className="plugin-download-copy">
+        <span className="eyebrow">TAKE THE SYNTH INTO YOUR DAW</span>
+        <h2>PLAY IT AS A PLUGIN</h2>
+        <p>Download the Windows VST3 plugin and use Web Play Synth in your DAW.</p>
+      </div>
+      <a className="plugin-download-button" href="https://github.com/mintymelinda/web-play-synth/releases/latest/download/web-play-synth-windows-x86_64.zip">
+        <span>DOWNLOAD WINDOWS VST3</span><small>VST3 + Standalone · 64-bit</small>
+      </a>
+    </section>
+
     {showHelp && <aside className="help-banner"><b>Quick start</b> — Press POWER ON, then play the on-screen keyboard or use A–K (white keys) and W/E/T/Y/U (black keys). Shape the tone with the VCOs, filter, envelopes, and LFO modulation controls.<button onClick={() => setShowHelp(false)}>DISMISS</button></aside>}
 
     <div className="section-kicker"><span>01</span> OSCILLATORS & MIXER <i /></div>
