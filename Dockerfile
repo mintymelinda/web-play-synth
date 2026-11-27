@@ -9,7 +9,7 @@ RUN emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release \
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 COPY --from=wasm-build /app/build/wasm/webplaysynth_engine.wasm /app/public/webplaysynth_engine.wasm
 COPY . .
 RUN npm run build
